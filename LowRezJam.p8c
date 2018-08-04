@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project version="1">
+  <game>
+    <name>LowRezJam</name>
+    <author>Darenn Keller</author>
+    <cart>C:\Users\kelle\AppData\Roaming\pico-8\carts\lowrezjam.p8</cart>
+  </game>
+  <entities>
+    <entity name="Notes" enabled="0">
+      <function name="ideas" enabled="0">ideas
+
+  1. 
+  2. </function>
+      <function name="todo" enabled="0">todo
+
+  1. 
+  2. </function>
+    </entity>
+    <entity name="Game" enabled="1">
+      <function name="globals" enabled="1">tile_size = 4
+
+player = nil
+
+deltaTime = 1/30 -- because we're running at 30 FPS</function>
+      <function name="_init" enabled="1">function _init()
+  -- Make the game in 64x64
+  poke(0x5f2c,3)
+  
+  player = create_player(6, 6)
+  bullet = create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
+  bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
+end</function>
+      <function name="_update" enabled="1">function _update()
+  update_player(player)
+  update_bullet(bullet)
+  update_bullet(bullet2)
+end</function>
+      <function name="_draw" enabled="1">function _draw()
+  cls()
+  map(0, 0, 0, 0, 8, 8)
+  draw_player(player)
+    
+  draw_bullet(bullet)
+  draw_bullet(bullet2)
+  
+  if (collide(bullet, bullet2)) then
+    print("Collided")
+    end
+end</function>
+    </entity>
+    <entity name="Rendering" enabled="1">
+      <function name="functions" enabled="1">-- Render the nth sprite top left quarter on the tile at (tile_x, tile_y)
+function render_tiled_sprite(n, tile_x, tile_y)
+  spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5)
+end
+
+-- Render the nth sprite top left quarter on the pixel (x ,y)
+function render_sprite(n, x, y)
+  spr(n, x, y, 0.5, 0.5)
+end</function>
+    </entity>
+    <entity name="Player" enabled="1">
+      <function name="update" enabled="1">function update_player(_player)
+  -- move
+  local new_position = {}
+  new_position.x = _player.pos.x
+  new_position.y = _player.pos.y
+  if (btnp(0)) then
+    new_position.x -= 1
+  elseif (btnp(1)) then
+    new_position.x += 1
+  elseif (btnp(2)) then
+    new_position.y -= 1
+  elseif (btnp(3)) then
+    new_position.y += 1
+  end
+  if (is_walkable(new_position)) then
+    _player.pos = new_position
+  end
+end</function>
+      <function name="draw" enabled="1">function draw_player(_player)
+  render_tiled_sprite(_player.sprite_id, _player.pos.x, _player.pos.y)
+end
+</function>
+      <function name="Create" enabled="1">function create_player(x, y)
+  _player = {}
+    _player.pos = {}
+    _player.pos.x = x -- x and y are tile positions
+    _player.pos.y = y
+    _player.sprite_id = 11
+  return _player
+end</function>
+    </entity>
+    <entity name="Collision" enabled="1">
+      <function name="functions" enabled="1">walkable_tile = 2
+
+-- x and y are tile positions
+function is_walkable(x, y)
+  return mget(x / 2, y / 2) == walkable_tile
+end
+
+function is_walkable(position)
+  return mget(position.x / 2, position.y / 2) == walkable_tile
+end
+
+function collide(obj, other)
+    if
+        other.pos.x+other.hitbox.x+other.hitbox.w &gt; obj.pos.x+obj.hitbox.x and 
+        other.pos.y+other.hitbox.y+other.hitbox.h &gt; obj.pos.y+obj.hitbox.y and
+        other.pos.x+other.hitbox.x &lt; obj.pos.x+obj.hitbox.x+obj.hitbox.w and
+        other.pos.y+other.hitbox.y &lt; obj.pos.y+obj.hitbox.y+obj.hitbox.h 
+    then
+        return true
+    end
+end</function>
+    </entity>
+    <entity name="Utils" enabled="1">
+      <function name="functions" enabled="1">-- converts anything to string, even nested tables
+function tostring(any)
+    if type(any)=="function" then 
+        return "function" 
+    end
+    if any==nil then 
+        return "nil" 
+    end
+    if type(any)=="string" then
+        return any
+    end
+    if type(any)=="boolean" then
+        if any then return "true" end
+        return "false"
+    end
+    if type(any)=="table" then
+        local str = "{ "
+        for k,v in pairs(any) do
+            str=str..tostring(k).."-&gt;"..tostring(v).." "
+        end
+        return str.."}"
+    end
+    if type(any)=="number" then
+        return ""..any
+    end
+    return "unkown" -- should never show
+end</function>
+    </entity>
+    <entity name="Bullet" enabled="1">
+      <function name="update" enabled="1">function update_bullet(_bullet)
+  if (time() - _bullet.last_update_time &gt; 1 / _bullet.speed) then
+    _bullet.last_update_time = time()
+    _bullet.pos.x += _bullet.direction.x
+    _bullet.pos.y += _bullet.direction.y
+  end
+end</function>
+      <function name="draw" enabled="1">function draw_bullet(_bullet)
+  render_sprite(_bullet.sprite_id, _bullet.pos.x, _bullet.pos.y)
+end</function>
+      <function name="create" enabled="1">function create_bullet(x, y, w, h, direction, speed, sprite_id)
+  _bullet = {}
+  _bullet.pos = {}
+  _bullet.pos.x = x
+  _bullet.pos.y = y
+  _bullet.hitbox = {}
+  _bullet.hitbox.x = 0 -- relative to pos
+  _bullet.hitbox.y = 0
+  _bullet.hitbox.w = w
+  _bullet.hitbox.h = h
+  _bullet.speed = speed -- pixels per second
+  _bullet.direction = direction -- vector2
+  _bullet.sprite_id = sprite_id
+  _bullet.last_update_time = time()
+  return _bullet
+end</function>
+    </entity>
+  </entities>
+</project>
