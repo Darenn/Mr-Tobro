@@ -6,42 +6,77 @@ __lua__
 
 --Game
 tile_size = 4
+g_pixel_size = 64
+g_row_tiles_count = 64 / tile_size 
 
-player = nil
+g_player = nil
 
 deltatime = 1/30 -- because we're running at 30 fps
+
+g_bullets = {}
+
+-- 2d matrix containing buildings
+g_map_buildings = {}
+  for x=0, g_row_tiles_count do
+    g_map_buildings[x] = {}
+    for y=0, g_row_tiles_count do
+      g_map_buildings[x][y] = nil
+    end
+  end
 
 function _init()
   -- make the game in 64x64
   poke(0x5f2c,3)
   
-  player = create_player(6, 6)
-  bullet = create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
-  bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
+  g_player = create_player(6, 6)
+  create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
+  create_building(7, 7, 1, building_type.canon)
+  --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
 end
 
 function _update()
-  update_player(player)
-  update_bullet(bullet)
-  update_bullet(bullet2)
+  update_player(g_player)
+  update_bullets()
+end
+
+
+function update_bullets()
+  -- make a copy to allow removal from g_bullets
+  copy = shallow_copy(g_bullets)
+  for bullet in all(copy) do
+    update_bullet(bullet)
+  end
 end
 
 function _draw()
   cls()
   map(0, 0, 0, 0, 8, 8)
-  draw_player(player)
-    
-  draw_bullet(bullet)
-  draw_bullet(bullet2)
-  
-  if (collide(bullet, bullet2)) then
-    print("collided")
+  draw_player(g_player)
+  draw_buildings()
+  draw_bullets()
+end
+
+function draw_bullets()
+  for bullet in all(copy) do
+    draw_bullet(bullet)
+  end
+end
+
+function draw_buildings()
+  for x=0, g_row_tiles_count do
+    for y=0, g_row_tiles_count do
+      local building = g_map_buildings[x][y]
+      if (building != nil) then
+        draw_building(building)
+      end
     end
+  end
 end
 
 --Rendering
 -- render the nth sprite top left quarter on the tile at (tile_x, tile_y)
-function render_tiled_sprite(n, tile_x, tile_y)
+function render_tiled_sprite(n, tile_x, tile_y, orientation)
+  orientation = orientation or e_orientation.right
   spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5)
 end
 
@@ -50,8 +85,30 @@ function render_sprite(n, x, y)
   spr(n, x, y, 0.5, 0.5)
 end
 
+function get_pixel_pos(tile_x, tile_y)
+  local pos = {}
+  pos.x = tile_x * tile_size
+  pos.y = tile_y * tile_size
+  return pos
+end
+
+e_orientation = {}
+e_orientation.right = 0
+e_orientation.down = 1
+e_orientation.left = 2
+e_orientation.up = 3
+
 --Player
 function update_player(_player)
+  
+  -- activate
+  if (btnp(4)) then
+    building = g_map_buildings[_player.pos.x][_player.pos.y]
+    if (building != nil) then
+      building.activate(building)
+    end
+  end
+  
   -- move
   local new_position = {}
   new_position.x = _player.pos.x
@@ -135,6 +192,35 @@ function tostring(any)
     end
     return "unkown" -- should never show
 end
+  
+function shallow_copy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = orig_value
+        end
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+  
+function orientation_to_direction(orientation)
+  local direction = {x=0, y=0}
+  if (orientation == e_orientation.right) then
+    direction.x = 1
+  elseif (orientation == e_orientation.left) then
+    direction.x = -1
+  elseif (orientation == e_orientation.up) then
+    direction.y = -1
+  elseif (orientation == e_orientation.down) then
+    direction.y = 1
+  end
+  return direction
+end
+
 
 --Bullet
 function update_bullet(_bullet)
@@ -163,7 +249,52 @@ function create_bullet(x, y, w, h, direction, speed, sprite_id)
   _bullet.direction = direction -- vector2
   _bullet.sprite_id = sprite_id
   _bullet.last_update_time = time()
+  add(g_bullets, _bullet)
   return _bullet
+end
+
+function create_canon_bullet(x, y, direction)
+  local speed = 1
+  local hitbox_w = 1
+  local hitbox_h = 1
+  local sprite_id = 11
+  create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id)
+end
+
+--building
+function create_building(tile_x, tile_y, orientation, _building_type_id)
+  local building = {}
+    building.type = _building_type_id
+    building.tile_pos = {}
+      building.tile_pos.x = tile_x
+      building.tile_pos.y = tile_y
+    building.orientation = orientation
+    
+  if (building.type == building_type.canon) then
+    building.sprite_id = 11
+    building.cooldown = 1 -- time in sec
+    building.activate = function (_building)
+      --bullet_pos = {x = get_pixel_pos(_building.tile_pos.x), y = get_pixel_pos(_building.tile_pos.y)}
+      --direction = orientation_to_direction(_building.orientation)
+      --create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
+      create_canon_bullet(2, 3, {x=1, y=0})
+    end
+   else
+    print("error : no building of this type : " .. _building_type_id)
+   end
+  
+  g_map_buildings[building.tile_pos.x][building.tile_pos.y] = building
+  return building
+end
+
+building_type = {}
+building_type.canon = 1;
+
+function updentity()
+end
+
+function draw_building(building)
+  render_tiled_sprite(building.sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation)
 end
 
 __gfx__
