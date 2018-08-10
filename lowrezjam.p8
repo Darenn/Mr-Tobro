@@ -31,12 +31,14 @@ function _init()
   g_player = create_player(6, 6)
   create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
   create_building(7, 7, 1, building_type.canon)
+  g_menu = create_menu()
   --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
 end
 
 function _update()
-  
+  update_player(g_player)
   update_bullets()
+  update_menu(g_menu)
 end
 
 
@@ -51,10 +53,10 @@ end
 function _draw()
   cls()
   map(0, 0, 0, 0, 8, 8)
-  update_player(g_player)
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
+  draw_menu(g_menu)
 end
 
 function draw_bullets()
@@ -98,6 +100,22 @@ e_orientation.right = 0
 e_orientation.down = 1
 e_orientation.left = 2
 e_orientation.up = 3
+
+  
+function orientation_to_direction(orientation)
+  local direction = {x=0, y=0}
+  if (orientation == e_orientation.right) then
+    direction.x = 1
+  elseif (orientation == e_orientation.left) then
+    direction.x = -1
+  elseif (orientation == e_orientation.up) then
+    direction.y = -1
+  elseif (orientation == e_orientation.down) then
+    direction.y = 1
+  end
+  return direction
+end
+
 
 --Player
 function update_player(_player)
@@ -207,20 +225,7 @@ function shallow_copy(orig)
     end
     return copy
 end
-  
-function orientation_to_direction(orientation)
-  local direction = {x=0, y=0}
-  if (orientation == e_orientation.right) then
-    direction.x = 1
-  elseif (orientation == e_orientation.left) then
-    direction.x = -1
-  elseif (orientation == e_orientation.up) then
-    direction.y = -1
-  elseif (orientation == e_orientation.down) then
-    direction.y = 1
-  end
-  return direction
-end
+
 
 
 --Bullet
@@ -262,40 +267,109 @@ function create_canon_bullet(x, y, direction)
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id)
 end
 
---building
+--Building
 function create_building(tile_x, tile_y, orientation, _building_type_id)
-  local building = {}
-    building.type = _building_type_id
-    building.tile_pos = {}
-      building.tile_pos.x = tile_x
-      building.tile_pos.y = tile_y
-    building.orientation = orientation
-    
-  if (building.type == building_type.canon) then
-    building.sprite_id = 11
-    building.cooldown = 1 -- time in sec
-    building.activate = function (_building)
-      bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
-      direction = orientation_to_direction(_building.orientation)
-      create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
-      --create_canon_bullet(2, 3, {x=1, y=0})
-    end
-   else
+  local building
+  local build_info = g_buildings_info[_building_type_id]
+  if (g_buildings_info[_building_type_id] != nil) then
+    building = create_base_building(tile_x, tile_y, orientation, _building_type_id)
+    building.sprite_id = build_info.sprite_id
+    building.cooldown = build_info.cooldown
+    building.activate = build_info.activate
+  else
     print("error : no building of this type : " .. _building_type_id)
-   end
+  end
   
   g_map_buildings[building.tile_pos.x][building.tile_pos.y] = building
   return building
 end
 
 building_type = {}
-building_type.canon = 1;
+building_type.canon = 0;
+
+g_building_canon = {}
+  g_building_canon.sprite_id = 11
+  g_building_canon.cooldown = 1 -- time in sec
+  g_building_canon.activate = function (_building)
+    bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+    direction = orientation_to_direction(_building.orientation)
+    create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
+  end
+
+g_buildings_info = {}
+g_buildings_info[building_type.canon] = g_building_canon
+
+-- all building are based on this, 
+-- call this at start of each create building functions
+function create_base_building(tile_x, tile_y, orientation, _building_type_id)
+  local building = {}
+    building.type = _building_type_id
+    building.tile_pos = {}
+      building.tile_pos.x = tile_x
+      building.tile_pos.y = tile_y
+    building.orientation = orientation
+  return building
+end
+
+
+
 
 function updentity()
 end
 
 function draw_building(building)
   render_tiled_sprite(building.sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation)
+end
+
+--Menu
+function create_menu()
+  local menu = {}
+    menu.item_selected_index = 0
+    menu.items = {-1, building_type.canon, building_type.canon, building_type.canon,building_type.canon}
+    menu.highlighted_color = 12
+    menu.window_color = 1
+    menu.between_icon_pixels = 2
+    menu.top_bot_icon_pixels = 2
+    menu.window_width = #menu.items*tile_size + (#menu.items+1)*menu.between_icon_pixels
+    menu.window_height = menu.top_bot_icon_pixels*2 + tile_size
+    return menu
+end
+
+function update_menu(menu)
+  if (btnp(0)) then
+    menu.item_selected_index -= 1
+    if (menu.item_selected_index < 0) then 
+      menu.item_selected_index = 0 
+    end
+  elseif (btnp(1)) then
+    menu.item_selected_index += 1
+    if (menu.item_selected_index >= #menu.items-1) then 
+      menu.item_selected_index = #menu.items-1
+    end
+  end
+end
+
+function draw_menu(menu)
+  -- draw the window background
+  rectfill(0, 0, menu.window_width - 1, menu.window_height - 1, menu.window_color)  
+    
+  -- draw the highlighted building (the selected one)
+  local pos_y = menu.top_bot_icon_pixels - 1
+  local pos_x = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
+  rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_color)
+  
+  -- draw the building icons
+  local pos_y = menu.top_bot_icon_pixels
+  for i=0, #menu.items - 1 do
+    local pos_x = menu.between_icon_pixels*(i+1) + tile_size*i
+    local sprite_id
+    if i == 0 then sprite_id = 1
+    else
+      building_id = menu.items[i + 1]
+      sprite_id  = g_buildings_info[building_id].sprite_id
+    end
+    render_sprite(sprite_id, pos_x, pos_y)    
+  end
 end
 
 __gfx__
