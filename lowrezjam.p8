@@ -35,7 +35,7 @@ function _init()
 end
 
 function _update()
-  update_player(g_player)
+  
   update_bullets()
 end
 
@@ -51,6 +51,7 @@ end
 function _draw()
   cls()
   map(0, 0, 0, 0, 8, 8)
+  update_player(g_player)
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
@@ -86,7 +87,7 @@ function render_sprite(n, x, y)
 end
 
 function get_pixel_pos(tile_x, tile_y)
-  local pos = {}
+  local pos = {x=-1, y=-1}
   pos.x = tile_x * tile_size
   pos.y = tile_y * tile_size
   return pos
@@ -274,10 +275,10 @@ function create_building(tile_x, tile_y, orientation, _building_type_id)
     building.sprite_id = 11
     building.cooldown = 1 -- time in sec
     building.activate = function (_building)
-      --bullet_pos = {x = get_pixel_pos(_building.tile_pos.x), y = get_pixel_pos(_building.tile_pos.y)}
-      --direction = orientation_to_direction(_building.orientation)
-      --create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
-      create_canon_bullet(2, 3, {x=1, y=0})
+      bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+      direction = orientation_to_direction(_building.orientation)
+      create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
+      --create_canon_bullet(2, 3, {x=1, y=0})
     end
    else
     print("error : no building of this type : " .. _building_type_id)
