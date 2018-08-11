@@ -40,6 +40,7 @@ end
 
 function _update()
     update_menu(g_menu)
+    if (g_in_menu) then return end
     update_player(g_player)
     update_bullets()
 end
@@ -322,6 +323,12 @@ end
 function updentity()
 end
 
+function is_buildable(tile_position)
+    local is_walkable = is_walkable(tile_position)
+    local is_empty = g_map_buildings[tile_position.x][tile_position.y] == nil
+    return is_walkable and is_empty
+end
+
 function draw_building(building)
   render_tiled_sprite(building.sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation)
 end
@@ -414,13 +421,17 @@ function on_right_arrow_pressed(menu)
 end
 
 function on_up_arrow_pressed(menu)
-  if (is_in_orientation(menu)) then
+  if (is_in_location(menu)) then
+    move_location_up(menu)
+  elseif (is_in_orientation(menu)) then
     orientate_building_upward(menu)
   end
 end
 
 function on_down_arrow_pressed(menu)
-  if (is_in_orientation(menu)) then
+  if (is_in_location(menu)) then
+    move_location_down(menu)
+  elseif (is_in_orientation(menu)) then
     orientate_building_downward(menu)
   end
 end
@@ -443,9 +454,19 @@ function move_selection_right(menu)
 end
   
 function move_location_left(menu)
+  menu.building_tile_pos.x -=1 
 end
 
 function move_location_right(menu)
+  menu.building_tile_pos.x +=1
+end
+
+function move_location_up(menu)
+  menu.building_tile_pos.y -=1
+end
+
+function move_location_down(menu)
+  menu.building_tile_pos.y +=1
 end
 
 function orientate_building_upward(menu)
@@ -509,11 +530,15 @@ function draw_selection_menu(menu)
 end
 
 function draw_location_menu(menu)
-  render_tiled_sprite(2, menu.building_tile_pos.x, menu.building_tile_pos.y)  
+  if (is_buildable(menu.building_tile_pos)) then
+    render_tiled_sprite(9, menu.building_tile_pos.x, menu.building_tile_pos.y)
+  else
+    render_tiled_sprite(4, menu.building_tile_pos.x, menu.building_tile_pos.y)
+  end  
 end
 
 function draw_orientation_menu(menu)
-  render_tiled_sprite(3, menu.building_tile_pos.x, menu.building_tile_pos.y)
+  render_tiled_sprite(5, menu.building_tile_pos.x, menu.building_tile_pos.y)
 end
 
 __gfx__
