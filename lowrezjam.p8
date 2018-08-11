@@ -84,9 +84,21 @@ end
 
 --Rendering
 -- render the nth sprite top left quarter on the tile at (tile_x, tile_y)
-function render_tiled_sprite(n, tile_x, tile_y, orientation)
+function render_tiled_sprite(n, tile_x, tile_y, orientation, n_vertical)
   orientation = orientation or e_orientation.right
-  spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5)
+  n_vertical = n_vertical or n
+  
+  local take_horizontal = orientation == e_orientation.left or orientation == e_orientation.right
+  local take_vertical = orientation == e_orientation.up or orientation == e_orientation.down
+  
+  local flipx = orientation == e_orientation.left
+  local flipy = orientation == e_orientation.down
+  
+  if (take_vertical) then 
+    n = n_vertical
+  end
+  
+  spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5, flipx, flipy)
 end
 
 -- render the nth sprite top left quarter on the pixel (x ,y)
@@ -279,7 +291,8 @@ function create_building(tile_x, tile_y, orientation, _building_type_id)
   local build_info = g_buildings_info[_building_type_id]
   if (g_buildings_info[_building_type_id] != nil) then
     building = create_base_building(tile_x, tile_y, orientation, _building_type_id)
-    building.sprite_id = build_info.sprite_id
+    building.horizontal_sprite_id = build_info.horizontal_sprite_id
+    building.vertical_sprite_id = build_info.vertical_sprite_id
     building.cooldown = build_info.cooldown
     building.activate = build_info.activate
   else
@@ -294,7 +307,8 @@ building_type = {}
 building_type.canon = 0;
 
 g_building_canon = {}
-  g_building_canon.sprite_id = 11
+  g_building_canon.horizontal_sprite_id = 11
+  g_building_canon.vertical_sprite_id = 13
   g_building_canon.cooldown = 1 -- time in sec
   g_building_canon.activate = function (_building)
     bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
@@ -320,6 +334,8 @@ end
 
 
 
+
+
 function updentity()
 end
 
@@ -330,7 +346,7 @@ function is_buildable(tile_position)
 end
 
 function draw_building(building)
-  render_tiled_sprite(building.sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation)
+  render_tiled_sprite(building.horizontal_sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation, building.vertical_sprite_id)
 end
 
 --Menu
@@ -346,7 +362,12 @@ function create_menu()
     menu.window_height = menu.top_bot_icon_pixels*2 + tile_size
     menu.state = menu_states.building_selection
     menu.building_tile_pos = {x=6, y=6}
+    menu.building_orientation = e_orientation.right
     return menu
+end
+  
+function get_menu_selected_id(menu)
+  return menu.items[menu.item_selected_index + 1]
 end
     
 menu_states = {}
@@ -381,10 +402,15 @@ function on_activate_pressed(menu)
   if (is_in_selection(menu))then
     menu.state = menu_states.building_location
   elseif (is_in_location(menu)) then
-    menu.state = menu_states.building_orientation
+    if (is_buildable(menu.building_tile_pos)) then
+      menu.state = menu_states.building_orientation
+    else
+      //todo play error
+    end
+    
   elseif (is_in_orientation(menu)) then
     menu.state = menu_states.building_selection
-    build_building()
+    build_building(menu)
   end
 end
 
@@ -392,10 +418,9 @@ function on_menu_pressed(menu)
   if (is_in_selection(menu))then
     g_in_menu = not g_in_menu
   elseif (is_in_location(menu)) then
-    menu.state = menu_states.building_selection
+     menu.state = menu_states.building_selection
   elseif (is_in_orientation(menu)) then
     menu.state = menu_states.building_location
-    build_building(menu)
   end
 end
   
@@ -437,6 +462,8 @@ function on_down_arrow_pressed(menu)
 end
   
 function build_building(menu)
+  local id = get_menu_selected_id(menu)
+  create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
 end
 
 function move_selection_left(menu)
@@ -470,15 +497,19 @@ function move_location_down(menu)
 end
 
 function orientate_building_upward(menu)
+  menu.building_orientation = e_orientation.up
 end
 
 function orientate_building_downward(menu)
+  menu.building_orientation = e_orientation.down
 end
 
 function orientate_building_leftward(menu)
+  menu.building_orientation = e_orientation.left
 end
 
 function orientate_building_rightward(menu)
+  menu.building_orientation = e_orientation.right
 end
 
 function is_in_selection(menu)
@@ -523,7 +554,7 @@ function draw_selection_menu(menu)
     if i == 0 then sprite_id = 1
     else
       building_id = menu.items[i + 1]
-      sprite_id  = g_buildings_info[building_id].sprite_id
+      sprite_id  = g_buildings_info[building_id].horizontal_sprite_id
     end
     render_sprite(sprite_id, pos_x, pos_y)    
   end
@@ -538,13 +569,14 @@ function draw_location_menu(menu)
 end
 
 function draw_orientation_menu(menu)
-  render_tiled_sprite(5, menu.building_tile_pos.x, menu.building_tile_pos.y)
+  local building = g_buildings_info[get_menu_selected_id(menu)]
+  render_tiled_sprite(building.horizontal_sprite_id, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, building.vertical_sprite_id)
 end
 
 __gfx__
-00000000eeeeeeee33333333999999990000000000000000000000000000000000000000666666666000606066bb3ee380000000000000000000000000000000
-00000000eeeeeeee333333339999999900000000000000000000000000000000000000006666600060606606666ee66e00000000000000000000000000000000
-00700700eeeeeeee33333333999999991111111111111111111111111111111111111111666666666000606066bbe66e00000000000000000000000000000000
+00000000eeeeeeee33333333999999990000000000000000000000000000000000000000666666666000606066bb3ee3800000000e0000000000000000000000
+00000000eeeeeeee333333339999999900000000000000000000000000000000000000006666600060606606666ee66e00000000060000000000000000000000
+00700700eeeeeeee33333333999999991111111111111111111111111111111111111111666666666000606066bbe66e00000000666000000000000000000000
 00077000eeeeeeee3333333399999999188bb171117171711717711171177711111111116333333333333336bbbb3ee300000000000000000000000000000000
 00077000eeeeeeee3333333399999999188bb1717171117717171717171171111111111163333333333333361c11266200000000000000000000000000000000
 00700700eeeeeeee33333333999999991cc99171717171717717171717171111111111116333333333333336ccc16ee600000000000000000000000000000000
