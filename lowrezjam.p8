@@ -9,9 +9,12 @@ tile_size = 4
 g_pixel_size = 64
 g_row_tiles_count = 64 / tile_size 
 
-g_player = nil
-
 deltatime = 1/30 -- because we're running at 30 fps
+
+
+g_in_menu = false;
+
+g_player = nil
 
 g_bullets = {}
 
@@ -36,9 +39,9 @@ function _init()
 end
 
 function _update()
-  update_player(g_player)
-  update_bullets()
-  update_menu(g_menu)
+    update_menu(g_menu)
+    update_player(g_player)
+    update_bullets()
 end
 
 
@@ -56,7 +59,9 @@ function _draw()
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
-  draw_menu(g_menu)
+  if (g_in_menu) then
+    draw_menu(g_menu)
+  end
 end
 
 function draw_bullets()
@@ -332,24 +337,155 @@ function create_menu()
     menu.top_bot_icon_pixels = 2
     menu.window_width = #menu.items*tile_size + (#menu.items+1)*menu.between_icon_pixels
     menu.window_height = menu.top_bot_icon_pixels*2 + tile_size
+    menu.state = menu_states.building_selection
+    menu.building_tile_pos = {x=6, y=6}
     return menu
 end
+    
+menu_states = {}
+menu_states.building_selection = 1;
+menu_states.building_location = 2;
+menu_states.building_orientation = 3;
+
+
 
 function update_menu(menu)
-  if (btnp(0)) then
-    menu.item_selected_index -= 1
-    if (menu.item_selected_index < 0) then 
-      menu.item_selected_index = 0 
-    end
+  if (btnp(5)) then
+    on_menu_pressed(menu)
+  end
+  if (not g_in_menu) then return end
+  if (btnp(4)) then
+    on_activate_pressed(menu)  
+  elseif (btnp(0)) then
+    on_left_arrow_pressed(menu)
   elseif (btnp(1)) then
-    menu.item_selected_index += 1
-    if (menu.item_selected_index >= #menu.items-1) then 
-      menu.item_selected_index = #menu.items-1
-    end
+    on_right_arrow_pressed(menu)
+  elseif (btnp(2)) then
+    on_up_arrow_pressed(menu)
+  elseif (btnp(3)) then
+    on_down_arrow_pressed(menu)
   end
 end
 
+-- menu button is 5
+-- activate button is 4
+
+function on_activate_pressed(menu)
+  if (is_in_selection(menu))then
+    menu.state = menu_states.building_location
+  elseif (is_in_location(menu)) then
+    menu.state = menu_states.building_orientation
+  elseif (is_in_orientation(menu)) then
+    menu.state = menu_states.building_selection
+    build_building()
+  end
+end
+
+function on_menu_pressed(menu)
+  if (is_in_selection(menu))then
+    g_in_menu = not g_in_menu
+  elseif (is_in_location(menu)) then
+    menu.state = menu_states.building_selection
+  elseif (is_in_orientation(menu)) then
+    menu.state = menu_states.building_location
+    build_building(menu)
+  end
+end
+  
+
+function on_left_arrow_pressed(menu)
+  if (is_in_selection(menu))then
+    move_selection_left(menu)
+  elseif (is_in_location(menu)) then
+    move_location_left(menu)
+  elseif (is_in_orientation(menu)) then
+    orientate_building_leftward(menu)
+  end
+end
+
+function on_right_arrow_pressed(menu)
+  if (is_in_selection(menu))then
+    move_selection_right(menu)
+  elseif (is_in_location(menu)) then
+    move_location_right(menu)
+  elseif (is_in_orientation(menu)) then
+    orientate_building_rightward(menu)
+  end
+end
+
+function on_up_arrow_pressed(menu)
+  if (is_in_orientation(menu)) then
+    orientate_building_upward(menu)
+  end
+end
+
+function on_down_arrow_pressed(menu)
+  if (is_in_orientation(menu)) then
+    orientate_building_downward(menu)
+  end
+end
+  
+function build_building(menu)
+end
+
+function move_selection_left(menu)
+  menu.item_selected_index -= 1
+  if (menu.item_selected_index < 0) then 
+    menu.item_selected_index = 0 
+  end
+end
+
+function move_selection_right(menu)
+  menu.item_selected_index += 1
+    if (menu.item_selected_index >= #menu.items-1) then 
+      menu.item_selected_index = #menu.items-1
+    end
+end
+  
+function move_location_left(menu)
+end
+
+function move_location_right(menu)
+end
+
+function orientate_building_upward(menu)
+end
+
+function orientate_building_downward(menu)
+end
+
+function orientate_building_leftward(menu)
+end
+
+function orientate_building_rightward(menu)
+end
+
+function is_in_selection(menu)
+  return menu.state == menu_states.building_selection 
+end
+
+function is_in_location(menu)
+  return menu.state == menu_states.building_location
+end
+
+function is_in_orientation(menu)
+  return menu.state == menu_states.building_orientation
+end
+
+
+
+
 function draw_menu(menu)
+  if(is_in_selection(menu))then
+    draw_selection_menu(menu)
+  elseif(is_in_location(menu)) then
+    draw_location_menu(menu)
+  elseif(is_in_orientation(menu))then
+    draw_orientation_menu(menu)
+  end
+end
+  
+function draw_selection_menu(menu)
   -- draw the window background
   rectfill(0, 0, menu.window_width - 1, menu.window_height - 1, menu.window_color)  
     
@@ -370,6 +506,14 @@ function draw_menu(menu)
     end
     render_sprite(sprite_id, pos_x, pos_y)    
   end
+end
+
+function draw_location_menu(menu)
+  render_tiled_sprite(2, menu.building_tile_pos.x, menu.building_tile_pos.y)  
+end
+
+function draw_orientation_menu(menu)
+  render_tiled_sprite(3, menu.building_tile_pos.x, menu.building_tile_pos.y)
 end
 
 __gfx__

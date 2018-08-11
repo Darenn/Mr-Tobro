@@ -21,9 +21,12 @@
 g_pixel_size = 64
 g_row_tiles_count = 64 / tile_size 
 
-g_player = nil
-
 deltatime = 1/30 -- because we're running at 30 fps
+
+
+g_in_menu = false;
+
+g_player = nil
 
 g_bullets = {}
 
@@ -46,9 +49,10 @@ g_map_buildings = {}
   --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
 end</function>
       <function name="_update" enabled="1">function _update()
-  update_player(g_player)
-  update_bullets()
-  update_menu(g_menu)
+    update_menu(g_menu)
+    if (g_in_menu) then return end
+    update_player(g_player)
+    update_bullets()
 end
 
 
@@ -65,7 +69,9 @@ end</function>
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
-  draw_menu(g_menu)
+  if (g_in_menu) then
+    draw_menu(g_menu)
+  end
 end
 
 function draw_bullets()
@@ -328,36 +334,167 @@ end</function>
       <function name="create" enabled="1">function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon}
+    menu.items = {-1, building_type.canon, building_type.canon, building_type.canon,building_type.canon}
     menu.highlighted_color = 12
     menu.window_color = 1
     menu.between_icon_pixels = 2
     menu.top_bot_icon_pixels = 2
     menu.window_width = #menu.items*tile_size + (#menu.items+1)*menu.between_icon_pixels
     menu.window_height = menu.top_bot_icon_pixels*2 + tile_size
+    menu.state = menu_states.building_selection
+    menu.building_tile_pos = {x=6, y=6}
     return menu
-end</function>
+end
+    
+menu_states = {}
+menu_states.building_selection = 1;
+menu_states.building_location = 2;
+menu_states.building_orientation = 3;
+
+</function>
       <function name="update" enabled="1">function update_menu(menu)
-  if (btnp(0)) then
-    menu.item_selected_index -= 1
-    if (menu.item_selected_index &lt; 0) then 
-      menu.item_selected_index = 0 
-    end
+  if (btnp(5)) then
+    on_menu_pressed(menu)
+  end
+  if (not g_in_menu) then return end
+  if (btnp(4)) then
+    on_activate_pressed(menu)  
+  elseif (btnp(0)) then
+    on_left_arrow_pressed(menu)
   elseif (btnp(1)) then
-    menu.item_selected_index += 1
+    on_right_arrow_pressed(menu)
+  elseif (btnp(2)) then
+    on_up_arrow_pressed(menu)
+  elseif (btnp(3)) then
+    on_down_arrow_pressed(menu)
+  end
+end
+
+-- menu button is 5
+-- activate button is 4
+
+function on_activate_pressed(menu)
+  if (is_in_selection(menu))then
+    menu.state = menu_states.building_location
+  elseif (is_in_location(menu)) then
+    menu.state = menu_states.building_orientation
+  elseif (is_in_orientation(menu)) then
+    menu.state = menu_states.building_selection
+    build_building()
+  end
+end
+
+function on_menu_pressed(menu)
+  if (is_in_selection(menu))then
+    g_in_menu = not g_in_menu
+  elseif (is_in_location(menu)) then
+    menu.state = menu_states.building_selection
+  elseif (is_in_orientation(menu)) then
+    menu.state = menu_states.building_location
+    build_building(menu)
+  end
+end
+  
+
+function on_left_arrow_pressed(menu)
+  if (is_in_selection(menu))then
+    move_selection_left(menu)
+  elseif (is_in_location(menu)) then
+    move_location_left(menu)
+  elseif (is_in_orientation(menu)) then
+    orientate_building_leftward(menu)
+  end
+end
+
+function on_right_arrow_pressed(menu)
+  if (is_in_selection(menu))then
+    move_selection_right(menu)
+  elseif (is_in_location(menu)) then
+    move_location_right(menu)
+  elseif (is_in_orientation(menu)) then
+    orientate_building_rightward(menu)
+  end
+end
+
+function on_up_arrow_pressed(menu)
+  if (is_in_orientation(menu)) then
+    orientate_building_upward(menu)
+  end
+end
+
+function on_down_arrow_pressed(menu)
+  if (is_in_orientation(menu)) then
+    orientate_building_downward(menu)
+  end
+end
+  
+function build_building(menu)
+end
+
+function move_selection_left(menu)
+  menu.item_selected_index -= 1
+  if (menu.item_selected_index &lt; 0) then 
+    menu.item_selected_index = 0 
+  end
+end
+
+function move_selection_right(menu)
+  menu.item_selected_index += 1
     if (menu.item_selected_index &gt;= #menu.items-1) then 
       menu.item_selected_index = #menu.items-1
     end
-  end
-end</function>
+end
+  
+function move_location_left(menu)
+end
+
+function move_location_right(menu)
+end
+
+function orientate_building_upward(menu)
+end
+
+function orientate_building_downward(menu)
+end
+
+function orientate_building_leftward(menu)
+end
+
+function orientate_building_rightward(menu)
+end
+
+function is_in_selection(menu)
+  return menu.state == menu_states.building_selection 
+end
+
+function is_in_location(menu)
+  return menu.state == menu_states.building_location
+end
+
+function is_in_orientation(menu)
+  return menu.state == menu_states.building_orientation
+end
+
+
+</function>
       <function name="draw" enabled="1">function draw_menu(menu)
+  if(is_in_selection(menu))then
+    draw_selection_menu(menu)
+  elseif(is_in_location(menu)) then
+    draw_location_menu(menu)
+  elseif(is_in_orientation(menu))then
+    draw_orientation_menu(menu)
+  end
+end
+  
+function draw_selection_menu(menu)
   -- Draw the window background
   rectfill(0, 0, menu.window_width - 1, menu.window_height - 1, menu.window_color)  
     
   -- Draw the highlighted building (the selected one)
   local pos_y = menu.top_bot_icon_pixels - 1
   local pos_x = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
-  rectfill(pos_x, pos_y, pos_x + tile_size, pos_y + tile_size, menu.highlighted_color)
+  rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_color)
   
   -- Draw the building icons
   local pos_y = menu.top_bot_icon_pixels
@@ -371,8 +508,14 @@ end</function>
     end
     render_sprite(sprite_id, pos_x, pos_y)    
   end
+end
 
-  print("aaaaa" .. menu.item_selected_index)
+function draw_location_menu(menu)
+  render_tiled_sprite(2, menu.building_tile_pos.x, menu.building_tile_pos.y)  
+end
+
+function draw_orientation_menu(menu)
+  render_tiled_sprite(3, menu.building_tile_pos.x, menu.building_tile_pos.y)
 end</function>
     </entity>
   </entities>
