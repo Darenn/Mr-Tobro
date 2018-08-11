@@ -17,6 +17,7 @@ g_in_menu = false;
 g_player = nil
 
 g_bullets = {}
+g_enemies = {}
 
 -- 2d matrix containing buildings
 g_map_buildings = {}
@@ -33,6 +34,7 @@ function _init()
   
   g_player = create_player(6, 6)
   create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
+  create_enemy(0, 2 * 4, 1, 1,1, {x=1, y=0}, 15, 4, 4)
   create_building(7, 7, 1, building_type.canon)
   g_menu = create_menu()
   --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
@@ -43,14 +45,23 @@ function _update()
     if (g_in_menu) then return end
     update_player(g_player)
     update_bullets()
+    update_enemies()
 end
 
 
 function update_bullets()
   -- make a copy to allow removal from g_bullets
-  copy = shallow_copy(g_bullets)
+  local copy = shallow_copy(g_bullets)
   for bullet in all(copy) do
     update_bullet(bullet)
+  end
+end
+
+function update_enemies()
+  -- make a copy to allow removal from g_bullets
+  local copy = shallow_copy(g_enemies)
+  for e in all(copy) do
+    update_enemy(e)
   end
 end
 
@@ -60,16 +71,24 @@ function _draw()
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
+  draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
   end
 end
 
 function draw_bullets()
-  for bullet in all(copy) do
+  for bullet in all(g_bullets) do
     draw_bullet(bullet)
   end
 end
+
+function draw_enemies()
+  for e in all(g_enemies) do
+    draw_enemy(e)
+  end
+end
+
 
 function draw_buildings()
   for x=0, g_row_tiles_count do
@@ -260,7 +279,7 @@ function draw_bullet(_bullet)
 end
 
 function create_bullet(x, y, w, h, direction, speed, sprite_id)
-  _bullet = {}
+    local _bullet = {}
   _bullet.pos = {}
   _bullet.pos.x = x
   _bullet.pos.y = y
@@ -571,6 +590,45 @@ end
 function draw_orientation_menu(menu)
   local building = g_buildings_info[get_menu_selected_id(menu)]
   render_tiled_sprite(building.horizontal_sprite_id, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, building.vertical_sprite_id)
+end
+
+--Enemy
+function create_enemy(x, y, w, h, hp, direction, speed, right_sprite_id, up_sprite_id)
+  local enemy = {}
+  enemy.pos = {}
+  enemy.pos.x = x
+  enemy.pos.y = y
+  enemy.hitbox = {}
+  enemy.hitbox.x = 0 -- relative to pos
+  enemy.hitbox.y = 0
+  enemy.hitbox.w = w
+  enemy.hitbox.h = h
+  enemy.hp = hp
+  enemy.speed = speed -- pixels per second
+  enemy.direction = direction -- vector2
+  enemy.right_sprite_id = right_sprite_id
+  enemy.last_update_time = time()
+  add(g_enemies, enemy)
+  return enemy
+end
+
+g_enemy_type = {}
+g_enemy_type.basic = 1
+
+g_enemies_info = {}
+--g_enemies_info[g_enemy_type.basic] = 
+
+
+function update_enemy(enemy)
+  if (time() - enemy.last_update_time > 1 / enemy.speed) then
+    enemy.last_update_time = time()
+    enemy.pos.x += enemy.direction.x
+    enemy.pos.y += enemy.direction.y
+  end
+end
+
+function draw_enemy(enemy)
+  render_sprite(enemy.sprite_id, enemy.pos.x, enemy.pos.y)
 end
 
 __gfx__
