@@ -108,8 +108,8 @@ function _draw()
   draw_tobro_window(g_tobro_window)
   draw_player(g_player)
   draw_buildings()
-  draw_bullets()
   draw_spawn_zones()
+  draw_bullets()
   draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
@@ -319,6 +319,10 @@ function update_bullet(_bullet)
     _bullet.pos.x += _bullet.direction.x
     _bullet.pos.y += _bullet.direction.y
   end
+  
+  if time() - _bullet.birth_time > _bullet.lifetime then
+   del(g_bullets, _bullet)
+  end
 end
 
 function draw_bullet(_bullet)
@@ -341,6 +345,7 @@ function create_bullet(x, y, w, h, direction, speed, sprite_id, lifetime, invici
   _bullet.direction = direction -- vector2
   _bullet.sprite_id = sprite_id
   _bullet.last_update_time = time()
+  _bullet.birth_time = time()
   add(g_bullets, _bullet)
   return _bullet
 end
@@ -359,6 +364,18 @@ function create_big_canon_bullet(x, y, direction)
   local hitbox_h = 4
   local sprite_id = 70
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, true)
+end
+
+function create_explozeur_bullet(x, y, direction)
+  local speed = 0
+  local hitbox_w = 4
+  local hitbox_h = 4
+  local sprite_id = 70
+  for _x=-2, 3 do
+    for _y=-2, 3 do
+      create_bullet(x + _x, y + _y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
+    end
+  end
 end
 
 --Building
@@ -386,6 +403,7 @@ building_type = {}
 building_type.canon = 0
 building_type.multiple_canon = 1
 building_type.big_canon = 2
+building_type.explozeur = 3
 
 g_building_canon = {}
   g_building_canon.price = 5
@@ -450,10 +468,26 @@ g_building_big_canon = {}
     create_big_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
   end
   
+g_building_explozeur = {}
+  g_building_explozeur.price = 50
+  g_building_explozeur.horizontal_sprite_id = 7
+  g_building_explozeur.vertical_sprite_id = 7
+  g_building_explozeur.hor_sprite_id_reload = 15
+  g_building_explozeur.ver_sprite_id_reload = 15
+  g_building_explozeur.cooldown = 1 -- time in sec
+  g_building_explozeur.activate = function (_building)
+    if not _building.is_ready then return end
+    on_activate(_building)
+    local direction = orientation_to_direction(_building.orientation)
+    local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+    create_explozeur_bullet(bullet_pos.x, bullet_pos.y, direction)
+  end
+  
 g_buildings_info = {}
 g_buildings_info[building_type.canon] = g_building_canon
 g_buildings_info[building_type.multiple_canon] = g_building_multiple_canon
 g_buildings_info[building_type.big_canon] = g_building_big_canon
+g_buildings_info[building_type.explozeur] = g_building_explozeur
 
 -- all building are based on this, 
 -- call this at start of each create building functions
@@ -508,7 +542,8 @@ end
 function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon}
+    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon,
+    building_type.explozeur}
     menu.highlighted_color = 12
     menu.highlighted_bad_color = 8
     menu.window_color = 1
@@ -986,10 +1021,10 @@ function draw_price()
 end
 
 __gfx__
-000000001111000000000000050000000665000055550000656000000660000008080000e0000000000000000500000065600000066500005555000000000000
-00000000e11e000006000000060000006ee500006ee600005e5000006ee60000082800000000000006000000060000005c5000006cc500006cc6000000000000
-00700700111100006e6500006e6000006ee500006ee60000656000006ee6000022222000000000006c6500006c600000656000006cc500006cc6000000000000
-000770001ee100000600000006000000066500000660000000000000066000000222000000000000060000000600000000000000066500000660000000000000
+000000001111000000000000050000000665000055550000656000000660000008080000e0000000000000000500000065600000066500005555000006600000
+00000000e11e000006000000060000006ee500006ee600005e5000006ee60000082800000000000006000000060000005c5000006cc500006cc600006cc60000
+00700700111100006e6500006e6000006ee500006ee60000656000006ee6000022222000000000006c6500006c600000656000006cc500006cc600006cc60000
+000770001ee100000600000006000000066500000660000000000000066000000222000000000000060000000600000000000000066500000660000006600000
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

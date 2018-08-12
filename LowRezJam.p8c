@@ -326,6 +326,10 @@ end
     _bullet.pos.x += _bullet.direction.x
     _bullet.pos.y += _bullet.direction.y
   end
+  
+  if time() - _bullet.birth_time &gt; _bullet.lifetime then
+   del(g_bullets, _bullet)
+  end
 end</function>
       <function name="draw" enabled="1">function draw_bullet(_bullet)
   render_sprite(_bullet.sprite_id, _bullet.pos.x, _bullet.pos.y)
@@ -346,6 +350,7 @@ end</function>
   _bullet.direction = direction -- vector2
   _bullet.sprite_id = sprite_id
   _bullet.last_update_time = time()
+  _bullet.birth_time = time()
   add(g_bullets, _bullet)
   return _bullet
 end
@@ -364,6 +369,14 @@ function create_big_canon_bullet(x, y, direction)
   local hitbox_h = 4
   local sprite_id = 70
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, true)
+end
+
+function create_big_canon_bullet(x, y, direction)
+  local speed = 15
+  local hitbox_w = 4
+  local hitbox_h = 4
+  local sprite_id = 70
+  create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
 end</function>
     </entity>
     <entity name="Building" enabled="1">
