@@ -29,6 +29,7 @@ g_in_menu = false;
 g_player = nil
 g_spawner = nil
 g_tobro_window = nil
+g_money = 10
 
 g_bullets = {}
 g_enemies = {}
@@ -106,10 +107,11 @@ end</function>
   draw_buildings()
   draw_bullets()
   draw_spawn_zones()
-  draw_enemies()  
+  draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
   end
+  draw_UI()
 end
 
 function draw_bullets()
@@ -231,7 +233,7 @@ end
     _player.pos = {}
     _player.pos.x = x -- x and y are tile positions
     _player.pos.y = y
-    _player.sprite_id = 11
+    _player.sprite_id = 1
   return _player
 end</function>
     </entity>
@@ -335,10 +337,10 @@ end</function>
 end
 
 function create_canon_bullet(x, y, direction)
-  local speed = 1
+  local speed = 15
   local hitbox_w = 1
   local hitbox_h = 1
-  local sprite_id = 11
+  local sprite_id = 9
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id)
 end</function>
     </entity>
@@ -352,6 +354,7 @@ end</function>
     building.vertical_sprite_id = build_info.vertical_sprite_id
     building.cooldown = build_info.cooldown
     building.activate = build_info.activate
+    building.price = build_info.price
   else
     print("error : no building of this type : " .. _building_type_id)
   end
@@ -364,12 +367,15 @@ building_type = {}
 building_type.canon = 0;
 
 g_building_canon = {}
-  g_building_canon.horizontal_sprite_id = 11
-  g_building_canon.vertical_sprite_id = 13
+  g_building_canon.price = 5
+  g_building_canon.horizontal_sprite_id = 2
+  g_building_canon.vertical_sprite_id = 3
   g_building_canon.cooldown = 1 -- time in sec
   g_building_canon.activate = function (_building)
-    bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
-    direction = orientation_to_direction(_building.orientation)
+    local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+    bullet_pos.x += 1
+    bullet_pos.y += 1
+    local direction = orientation_to_direction(_building.orientation)
     create_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
   end
 
@@ -410,6 +416,7 @@ end</function>
     menu.item_selected_index = 0
     menu.items = {-1, building_type.canon, building_type.canon, building_type.canon,building_type.canon}
     menu.highlighted_color = 12
+    menu.highlighted_bad_color = 8
     menu.window_color = 1
     menu.between_icon_pixels = 2
     menu.top_bot_icon_pixels = 2
@@ -423,6 +430,11 @@ end
   
 function get_menu_selected_id(menu)
   return menu.items[menu.item_selected_index + 1]
+end
+
+function can_buy_selected_building(menu)
+  if (get_menu_selected_id(menu) == -1) then return true end
+  return g_buildings_info[get_menu_selected_id(menu)].price &lt;= g_money
 end
     
 menu_states = {}
@@ -517,6 +529,7 @@ end
   
 function build_building(menu)
   local id = get_menu_selected_id(menu)
+  g_money -= g_buildings_info[get_menu_selected_id(menu)].price
   create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
 end
 
@@ -597,8 +610,11 @@ function draw_selection_menu(menu)
   -- Draw the highlighted building (the selected one)
   local pos_y = menu.top_bot_icon_pixels - 1
   local pos_x = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
-  rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_color)
-  
+  if (can_buy_selected_building(menu)) then
+    rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_color)
+  else
+    rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_bad_color)
+  end
   -- Draw the building icons
   local pos_y = menu.top_bot_icon_pixels
   for i=0, #menu.items - 1 do
@@ -615,14 +631,15 @@ end
 
 function draw_location_menu(menu)
   if (is_buildable(menu.building_tile_pos)) then
-    render_tiled_sprite(9, menu.building_tile_pos.x, menu.building_tile_pos.y)
+    render_tiled_sprite(65, menu.building_tile_pos.x, menu.building_tile_pos.y)
   else
-    render_tiled_sprite(4, menu.building_tile_pos.x, menu.building_tile_pos.y)
+    render_tiled_sprite(66, menu.building_tile_pos.x, menu.building_tile_pos.y)
   end  
 end
 
 function draw_orientation_menu(menu)
   local building = g_buildings_info[get_menu_selected_id(menu)]
+  render_tiled_sprite(65, menu.building_tile_pos.x, menu.building_tile_pos.y)
   render_tiled_sprite(building.horizontal_sprite_id, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, building.vertical_sprite_id)
 end</function>
     </entity>
@@ -648,6 +665,7 @@ function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   enemy.hp = hp
   enemy.speed = speed -- pixels per second
   enemy.right_sprite_id = right_sprite_id
+  enemy.up_sprite_id = up_sprite_id
   enemy.last_update_time = time()
   return enemy
 end
@@ -656,7 +674,7 @@ g_enemy_type = {}
 g_enemy_type.basic = 1
 
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 0.5, 2, 3)
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 4, 4, 1, 0.5, 8, 8)
 </function>
       <function name="update" enabled="1">function update_enemy(enemy)
   if (enemy.pos.x - 30 &gt; 0) then
@@ -682,7 +700,7 @@ g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 0.5, 2, 3)
   end
 end</function>
       <function name="draw" enabled="1">function draw_enemy(enemy)
-  render_sprite(enemy.sprite_id, enemy.pos.x, enemy.pos.y)
+  render_sprite(enemy.right_sprite_id, enemy.pos.x, enemy.pos.y)
 end</function>
     </entity>
     <entity name="Spawner" enabled="1">
@@ -743,7 +761,7 @@ end</function>
     </entity>
     <entity name="SpawnZone" enabled="1">
       <function name="create" enabled="1">function create_spawn_zone(pos, sprite_id)
-  sprite_id = sprite_id or 14
+  sprite_id = sprite_id or 67
   local zone = {}
   zone.pos = pos
   zone.sprite_id = sprite_id
@@ -782,6 +800,20 @@ end</function>
   local p_pos = get_pixel_pos(win.tile_pos.x, win.tile_pos.y)
   local p_poswh = get_pixel_pos(win.tile_pos.x+ win.tile_w, win.tile_pos.y + win.tile_h)
   rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
+end</function>
+    </entity>
+    <entity name="UI" enabled="1">
+      <function name="update" enabled="1">function updateUI()
+end</function>
+      <function name="draw" enabled="1">function draw_UI()
+  draw_price()
+end
+
+
+function draw_price()
+  rectfill(48, 0, 64, 7, 2)
+  spr(68, 59, 2)
+  print(g_money, 50, 1)
 end</function>
     </entity>
   </entities>
