@@ -27,10 +27,13 @@ deltatime = 1/30 -- because we're running at 30 fps
 g_in_menu = false;
 
 g_player = nil
+g_spawner = nil
+g_tobro_window = nil
 
 g_bullets = {}
 g_enemies = {}
-g_spawner = nil
+g_spawn_zones = {}
+
 
 -- 2d matrix containing buildings
 g_map_buildings = {}
@@ -39,7 +42,8 @@ g_map_buildings = {}
     for y=0, g_row_tiles_count do
       g_map_buildings[x][y] = nil
     end
-  end</function>
+  end
+  </function>
       <function name="_init" enabled="1">function _init()
   -- make the game in 64x64
   poke(0x5f2c,3)
@@ -48,6 +52,7 @@ g_map_buildings = {}
   create_building(7, 7, 1, building_type.canon)
   g_menu = create_menu()
   g_spawner = create_spawner()
+  g_tobro_window = create_tobro_window({x=6,y=6},4,4)
   create_level(g_spawner)
 end</function>
       <function name="_update" enabled="1">function _update()
@@ -96,10 +101,12 @@ end</function>
       <function name="_draw" enabled="1">function _draw()
   cls()
   map(0, 0, 0, 0, 8, 8)
+  draw_tobro_window(g_tobro_window)
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
-  draw_enemies()
+  draw_spawn_zones()
+  draw_enemies()  
   if (g_in_menu) then
     draw_menu(g_menu)
   end
@@ -117,6 +124,11 @@ function draw_enemies()
   end
 end
 
+function draw_spawn_zones()
+  for e in all(g_spawn_zones) do
+    draw_spawn_zone(e)
+  end
+end
 
 function draw_buildings()
   for x=0, g_row_tiles_count do
@@ -232,7 +244,9 @@ function is_walkable(x, y)
 end
 
 function is_walkable(position)
-  return mget(position.x / 2, position.y / 2) == walkable_tile
+  --return mget(position.x / 2, position.y / 2) == walkable_tile
+  local pos = {x = position.x / 2, y = position.y /2}
+  return is_in_tobro_window(g_tobro_window, position)
 end
 
 function collide(obj, other)
@@ -675,7 +689,7 @@ end</function>
       <function name="create_level" enabled="1">function create_level(spawner)
   
   spawn_enemy(1, g_enemy_type.basic, {x=1, y=1}, spawner)
-  
+  spawn_zone(2, {x=4, y=4}, spawner)
 end</function>
       <function name="create" enabled="1">function create_spawner()
   local spawner = {}
@@ -693,7 +707,7 @@ function spawn_enemy(spawn_step, enemy_type, pos, spawner)
   add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
 end
 
-function spawn_zone(pos)
+function spawn_zone(spawn_step, pos, spawner)
   if (spawner.zone_to_spawn[spawn_step]) == nil then
     spawner.zone_to_spawn[spawn_step] = {}
   end
@@ -717,7 +731,7 @@ end
     local spawn_table = spawner.zone_to_spawn[spawner.step]
     if (spawn_table != nil) then
       for zone in all(spawn_table) do
-        
+        create_spawn_zone(zone.pos)
       end
     end
     
@@ -729,14 +743,45 @@ end</function>
     </entity>
     <entity name="SpawnZone" enabled="1">
       <function name="create" enabled="1">function create_spawn_zone(pos, sprite_id)
+  sprite_id = sprite_id or 14
   local zone = {}
   zone.pos = pos
   zone.sprite_id = sprite_id
+  add(g_spawn_zones, zone)
+  return zone
 end</function>
       <function name="update" enabled="1">function update_spawn_zone()
 end</function>
       <function name="draw" enabled="1">function draw_spawn_zone(zone)
   render_sprite(zone.sprite_id, zone.pos.x, zone.pos.y)
+end</function>
+    </entity>
+    <entity name="TobroWindow" enabled="1">
+      <function name="create" enabled="1">function create_tobro_window(tile_pos, tile_w, tile_h)
+  tobro_window = {}
+  tobro_window.tile_pos = tile_pos
+  tobro_window.tile_w = tile_w
+  tobro_window.tile_h = tile_h
+  return tobro_window
+end
+
+function is_in_tobro_window(win, tile_pos)
+  local p_poswh = {x=win.tile_pos.x+ win.tile_w, y=win.tile_pos.y + win.tile_h}
+  if
+      tile_pos.x &gt;= win.tile_pos.x and tile_pos.x &lt; p_poswh.x and
+      tile_pos.y &gt;= win.tile_pos.y and tile_pos.y &lt; p_poswh.y
+  then
+      return true
+  else
+      return false
+  end
+end</function>
+      <function name="update" enabled="1">function update_tobro_window()
+end</function>
+      <function name="draw" enabled="1">function draw_tobro_window(win)
+  local p_pos = get_pixel_pos(win.tile_pos.x, win.tile_pos.y)
+  local p_poswh = get_pixel_pos(win.tile_pos.x+ win.tile_w, win.tile_pos.y + win.tile_h)
+  rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
 end</function>
     </entity>
   </entities>
