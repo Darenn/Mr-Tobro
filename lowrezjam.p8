@@ -39,7 +39,6 @@ function _init()
   poke(0x5f2c,3)
   
   g_player = create_player(6, 6)
-  create_building(7, 7, 1, building_type.canon)
   g_menu = create_menu()
   g_spawner = create_spawner()
   g_tobro_window = create_tobro_window({x=6,y=6},4,4)
@@ -49,6 +48,7 @@ end
 function _update()
     update_menu(g_menu)
     if (g_in_menu) then return end
+    update_buildings()
     update_player(g_player)
     update_bullets()
     update_collisions()
@@ -73,6 +73,17 @@ function update_enemies()
   end
 end
 
+function update_buildings()
+  for x=0, g_row_tiles_count do
+    for y=0, g_row_tiles_count do
+      local building = g_map_buildings[x][y]
+      if building != nil then 
+        update_building(building)
+      end
+    end
+  end
+end
+
 function update_collisions()
   local copyb = shallow_copy(g_bullets)
   for bullet in all(copyb) do
@@ -81,6 +92,7 @@ function update_collisions()
       local destroyed = false;
       if (collide(bullet, e)) then
         del(g_enemies, e)
+        g_money += 1
         destroyed = true;
       end
       if (destroyed) then
@@ -118,6 +130,7 @@ function draw_enemies()
 end
 
 function draw_spawn_zones()
+  print(#g_spawn_zones)
   for e in all(g_spawn_zones) do
     draw_spawn_zone(e)
   end
@@ -347,6 +360,8 @@ function create_building(tile_x, tile_y, orientation, _building_type_id)
     building = create_base_building(tile_x, tile_y, orientation, _building_type_id)
     building.horizontal_sprite_id = build_info.horizontal_sprite_id
     building.vertical_sprite_id = build_info.vertical_sprite_id
+    building.hor_sprite_id_reload = build_info.hor_sprite_id_reload
+    building.ver_sprite_id_reload =build_info.ver_sprite_id_reload
     building.cooldown = build_info.cooldown
     building.activate = build_info.activate
     building.price = build_info.price
@@ -365,8 +380,12 @@ g_building_canon = {}
   g_building_canon.price = 5
   g_building_canon.horizontal_sprite_id = 2
   g_building_canon.vertical_sprite_id = 3
+  g_building_canon.hor_sprite_id_reload = 10
+  g_building_canon.ver_sprite_id_reload = 11
   g_building_canon.cooldown = 1 -- time in sec
   g_building_canon.activate = function (_building)
+    if not _building.is_ready then return end
+    on_activate(_building)
     local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
     bullet_pos.x += 1
     bullet_pos.y += 1
@@ -386,15 +405,28 @@ function create_base_building(tile_x, tile_y, orientation, _building_type_id)
       building.tile_pos.x = tile_x
       building.tile_pos.y = tile_y
     building.orientation = orientation
+    building.is_ready = true
+    building.reload_timer = 0
   return building
+end
+
+-- to call on activate functions
+function on_activate(building)
+  building.is_ready = false
+  building.reload_timer = building.cooldown
 end
 
 
 
 
 
-
-function updentity()
+function update_building(building)
+  if not building.is_ready then
+    building.reload_timer -= deltatime
+  end
+  if building.reload_timer <= 0 then
+    building.is_ready = true
+  end
 end
 
 function is_buildable(tile_position)
@@ -404,7 +436,13 @@ function is_buildable(tile_position)
 end
 
 function draw_building(building)
-  render_tiled_sprite(building.horizontal_sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation, building.vertical_sprite_id)
+  if building.is_ready then
+    render_tiled_sprite(building.horizontal_sprite_id, building.tile_pos.x, 
+    building.tile_pos.y, building.orientation, building.vertical_sprite_id)
+  else
+    render_tiled_sprite(building.hor_sprite_id_reload, building.tile_pos.x, 
+    building.tile_pos.y, building.orientation, building.ver_sprite_id_reload)
+  end
 end
 
 --Menu
@@ -475,6 +513,7 @@ function on_activate_pressed(menu)
     
   elseif (is_in_orientation(menu)) then
     menu.state = menu_states.building_selection
+    g_in_menu = false
     build_building(menu)
   end
 end
@@ -700,17 +739,17 @@ g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 4, 4, 1, 0.5, 8, 8)
 
 
 function update_enemy(enemy)
-  if (enemy.pos.x - 30 > 0) then
+  if (enemy.pos.x - 28 > 0) then
     enemy.direction.x = -1
-  elseif (enemy.pos.x - 32 < 0) then
+  elseif (enemy.pos.x - 28 < 0) then
     enemy.direction.x = 1
   else
     enemy.direction.x = 0
   end
   
-  if (enemy.pos.y - 30 > 0) then
+  if (enemy.pos.y - 28 > 0) then
     enemy.direction.y = -1
-  elseif (enemy.pos.y - 32< 0) then
+  elseif (enemy.pos.y - 28< 0) then
     enemy.direction.y = 1
   else
     enemy.direction.y = 0
@@ -729,9 +768,18 @@ end
 
 --Spawner
 function create_level(spawner)
+  local s1 = {x=0* tile_size, y=7* tile_size};
+  spawn_zone(2, s1, spawner)
+  spawn_enemy(3, g_enemy_type.basic, s1, spawner)
   
-  spawn_enemy(1, g_enemy_type.basic, {x=1, y=1}, spawner)
-  spawn_zone(2, {x=4, y=4}, spawner)
+  local s2 = {x=7 * tile_size, y=0* tile_size}
+  spawn_zone(5, s2, spawner)
+  spawn_enemy(6, g_enemy_type.basic, s2, spawner)
+  
+  local s3 = {x=15* tile_size, y=7* tile_size}
+  spawn_zone(9, s3, spawner)
+  spawn_enemy(10, g_enemy_type.basic, s3, spawner)
+  
 end
 
 function create_spawner()
@@ -747,7 +795,7 @@ function spawn_enemy(spawn_step, enemy_type, pos, spawner)
   if (spawner.enemies_to_spawn[spawn_step]) == nil then
     spawner.enemies_to_spawn[spawn_step] = {}
   end
-  add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
+  add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = {x=pos.x,y=pos.y}})
 end
 
 function spawn_zone(spawn_step, pos, spawner)
@@ -852,10 +900,10 @@ function draw_price()
 end
 
 __gfx__
-000000001111000000000000050000000665000055550000656000000660000008080000e0000000000000000000000000000000000000000000000000000000
-00000000e11e000006000000060000006ee500006ee600005e5000006ee600000828000000000000000000000000000000000000000000000000000000000000
-00700700111100006e6500006e6000006ee500006ee60000656000006ee600002222200000000000000000000000000000000000000000000000000000000000
-000770001ee100000600000006000000066500000660000000000000066000000222000000000000000000000000000000000000000000000000000000000000
+000000001111000000000000050000000665000055550000656000000660000008080000e0000000000000000500000000000000000000000000000000000000
+00000000e11e000006000000060000006ee500006ee600005e5000006ee600000828000000000000060000000600000000000000000000000000000000000000
+00700700111100006e6500006e6000006ee500006ee60000656000006ee6000022222000000000006c6500006c60000000000000000000000000000000000000
+000770001ee100000600000006000000066500000660000000000000066000000222000000000000060000000600000000000000000000000000000000000000
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
