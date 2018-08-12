@@ -4,7 +4,7 @@ __lua__
 --lowrezjam
 --by darenn keller
 
---game
+--Game
 tile_size = 4
 g_pixel_size = 64
 g_row_tiles_count = 64 / tile_size 
@@ -17,6 +17,8 @@ g_in_menu = false;
 g_player = nil
 
 g_bullets = {}
+g_enemies = {}
+g_spawner = nil
 
 -- 2d matrix containing buildings
 g_map_buildings = {}
@@ -32,10 +34,10 @@ function _init()
   poke(0x5f2c,3)
   
   g_player = create_player(6, 6)
-  create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
   create_building(7, 7, 1, building_type.canon)
   g_menu = create_menu()
-  --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
+  g_spawner = create_spawner()
+  create_level(g_spawner)
 end
 
 function _update()
@@ -43,14 +45,42 @@ function _update()
     if (g_in_menu) then return end
     update_player(g_player)
     update_bullets()
+    update_collisions()
+    update_enemies()
+    update_spawner(g_spawner)
 end
 
 
 function update_bullets()
   -- make a copy to allow removal from g_bullets
-  copy = shallow_copy(g_bullets)
+  local copy = shallow_copy(g_bullets)
   for bullet in all(copy) do
     update_bullet(bullet)
+  end
+end
+
+function update_enemies()
+  -- make a copy to allow removal from g_bullets
+  local copy = shallow_copy(g_enemies)
+  for e in all(copy) do
+    update_enemy(e)
+  end
+end
+
+function update_collisions()
+  local copyb = shallow_copy(g_bullets)
+  for bullet in all(copyb) do
+    local copye = shallow_copy(g_enemies)
+    for e in all(copye) do
+      local destroyed = false;
+      if (collide(bullet, e)) then
+        del(g_enemies, e)
+        destroyed = true;
+      end
+      if (destroyed) then
+        del(g_bullets, bullet)
+      end
+    end
   end
 end
 
@@ -60,16 +90,24 @@ function _draw()
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
+  draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
   end
 end
 
 function draw_bullets()
-  for bullet in all(copy) do
+  for bullet in all(g_bullets) do
     draw_bullet(bullet)
   end
 end
+
+function draw_enemies()
+  for e in all(g_enemies) do
+    draw_enemy(e)
+  end
+end
+
 
 function draw_buildings()
   for x=0, g_row_tiles_count do
@@ -82,13 +120,23 @@ function draw_buildings()
   end
 end
 
---rendering
+--Rendering
 -- render the nth sprite top left quarter on the tile at (tile_x, tile_y)
-function render_tiled_sprite(n, tile_x, tile_y, orientation)
+function render_tiled_sprite(n, tile_x, tile_y, orientation, n_vertical)
   orientation = orientation or e_orientation.right
+  n_vertical = n_vertical or n
+  
+  local take_horizontal = orientation == e_orientation.left or orientation == e_orientation.right
+  local take_vertical = orientation == e_orientation.up or orientation == e_orientation.down
+  
   local flipx = orientation == e_orientation.left
-  local flipy = orientation == e_orientation.up
-  spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5, false,false)
+  local flipy = orientation == e_orientation.down
+  
+  if (take_vertical) then 
+    n = n_vertical
+  end
+  
+  spr(n, tile_x * tile_size, tile_y * tile_size, 0.5, 0.5, flipx, flipy)
 end
 
 -- render the nth sprite top left quarter on the pixel (x ,y)
@@ -125,7 +173,7 @@ function orientation_to_direction(orientation)
 end
 
 
---player
+--Player
 function update_player(_player)
   
   -- activate
@@ -168,7 +216,7 @@ function create_player(x, y)
   return _player
 end
 
---collision
+--Collision
 walkable_tile = 2
 
 -- x and y are tile positions
@@ -191,7 +239,7 @@ function collide(obj, other)
     end
 end
 
---utils
+--Utils
 -- converts anything to string, even nested tables
 function tostring(any)
     if type(any)=="function" then 
@@ -236,7 +284,7 @@ end
 
 
 
---bullet
+--Bullet
 function update_bullet(_bullet)
   if (time() - _bullet.last_update_time > 1 / _bullet.speed) then
     _bullet.last_update_time = time()
@@ -250,7 +298,7 @@ function draw_bullet(_bullet)
 end
 
 function create_bullet(x, y, w, h, direction, speed, sprite_id)
-  _bullet = {}
+    local _bullet = {}
   _bullet.pos = {}
   _bullet.pos.x = x
   _bullet.pos.y = y
@@ -275,13 +323,14 @@ function create_canon_bullet(x, y, direction)
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id)
 end
 
---building
+--Building
 function create_building(tile_x, tile_y, orientation, _building_type_id)
   local building
   local build_info = g_buildings_info[_building_type_id]
   if (g_buildings_info[_building_type_id] != nil) then
     building = create_base_building(tile_x, tile_y, orientation, _building_type_id)
-    building.sprite_id = build_info.sprite_id
+    building.horizontal_sprite_id = build_info.horizontal_sprite_id
+    building.vertical_sprite_id = build_info.vertical_sprite_id
     building.cooldown = build_info.cooldown
     building.activate = build_info.activate
   else
@@ -296,7 +345,8 @@ building_type = {}
 building_type.canon = 0;
 
 g_building_canon = {}
-  g_building_canon.sprite_id = 11
+  g_building_canon.horizontal_sprite_id = 11
+  g_building_canon.vertical_sprite_id = 13
   g_building_canon.cooldown = 1 -- time in sec
   g_building_canon.activate = function (_building)
     bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
@@ -322,6 +372,8 @@ end
 
 
 
+
+
 function updentity()
 end
 
@@ -332,10 +384,10 @@ function is_buildable(tile_position)
 end
 
 function draw_building(building)
-  render_tiled_sprite(building.sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation)
+  render_tiled_sprite(building.horizontal_sprite_id, building.tile_pos.x, building.tile_pos.y, building.orientation, building.vertical_sprite_id)
 end
 
---menu
+--Menu
 function create_menu()
   local menu = {}
     menu.item_selected_index = 0
@@ -350,6 +402,10 @@ function create_menu()
     menu.building_tile_pos = {x=6, y=6}
     menu.building_orientation = e_orientation.right
     return menu
+end
+  
+function get_menu_selected_id(menu)
+  return menu.items[menu.item_selected_index + 1]
 end
     
 menu_states = {}
@@ -392,7 +448,7 @@ function on_activate_pressed(menu)
     
   elseif (is_in_orientation(menu)) then
     menu.state = menu_states.building_selection
-    build_building()
+    build_building(menu)
   end
 end
 
@@ -403,7 +459,6 @@ function on_menu_pressed(menu)
      menu.state = menu_states.building_selection
   elseif (is_in_orientation(menu)) then
     menu.state = menu_states.building_location
-    build_building(menu)
   end
 end
   
@@ -445,6 +500,8 @@ function on_down_arrow_pressed(menu)
 end
   
 function build_building(menu)
+  local id = get_menu_selected_id(menu)
+  create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
 end
 
 function move_selection_left(menu)
@@ -535,7 +592,7 @@ function draw_selection_menu(menu)
     if i == 0 then sprite_id = 1
     else
       building_id = menu.items[i + 1]
-      sprite_id  = g_buildings_info[building_id].sprite_id
+      sprite_id  = g_buildings_info[building_id].horizontal_sprite_id
     end
     render_sprite(sprite_id, pos_x, pos_y)    
   end
@@ -550,7 +607,111 @@ function draw_location_menu(menu)
 end
 
 function draw_orientation_menu(menu)
-  render_tiled_sprite(5, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation)
+  local building = g_buildings_info[get_menu_selected_id(menu)]
+  render_tiled_sprite(building.horizontal_sprite_id, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, building.vertical_sprite_id)
+end
+
+--Enemy
+function instanciate_enemy(enemy_type, pos)
+  local copy = shallow_copy(g_enemies_info[enemy_type])
+  copy.pos = pos
+  add(g_enemies, copy)
+  return copy
+end
+
+function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
+  local enemy = {}
+  enemy.pos = {}
+  enemy.pos.x = x
+  enemy.pos.y = y
+  enemy.hitbox = {}
+  enemy.hitbox.x = 0 -- relative to pos
+  enemy.hitbox.y = 0
+  enemy.hitbox.w = w
+  enemy.hitbox.h = h
+  enemy.direction = {x = 0, y = 0}
+  enemy.hp = hp
+  enemy.speed = speed -- pixels per second
+  enemy.right_sprite_id = right_sprite_id
+  enemy.last_update_time = time()
+  return enemy
+end
+
+g_enemy_type = {}
+g_enemy_type.basic = 1
+
+g_enemies_info = {}
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 0.5, 2, 3)
+
+
+function update_enemy(enemy)
+  if (enemy.pos.x - 30 > 0) then
+    enemy.direction.x = -1
+  elseif (enemy.pos.x - 32 < 0) then
+    enemy.direction.x = 1
+  else
+    enemy.direction.x = 0
+  end
+  
+  if (enemy.pos.y - 30 > 0) then
+    enemy.direction.y = -1
+  elseif (enemy.pos.y - 32< 0) then
+    enemy.direction.y = 1
+  else
+    enemy.direction.y = 0
+  end
+    
+  if (time() - enemy.last_update_time > 1 / enemy.speed) then
+    enemy.last_update_time = time()
+    enemy.pos.x += enemy.direction.x
+    enemy.pos.y += enemy.direction.y
+  end
+end
+
+function draw_enemy(enemy)
+  render_sprite(enemy.sprite_id, enemy.pos.x, enemy.pos.y)
+end
+
+--Spawner
+function create_level(spawner)
+  
+  spawn_enemy(1, g_enemy_type.basic, {x=1, y=1}, spawner)
+  
+end
+
+function create_spawner()
+  local spawner = {}
+  spawner.enemies_to_spawn = {}
+  spawner.last_update_time = time()
+  spawner.step = 0 -- one step per second
+  return spawner
+end
+
+function spawn_enemy(spawn_step, enemy_type, pos, spawner)
+  if (spawner.enemies_to_spawn[spawn_step]) == nil then
+    spawner.enemies_to_spawn[spawn_step] = {}
+  end
+  add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
+end
+
+
+function update_spawner(spawner)
+  
+  -- spawn every seconds
+  if (time() - spawner.last_update_time > 1) then
+    -- spawn enemies
+    local spawn_table = spawner.enemies_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for spawn_enemy_info in all(spawn_table) do
+        if (spawn_enemy_info == nil) then aaa() end
+        instanciate_enemy(spawn_enemy_info.enemy_type, spawn_enemy_info.pos)
+      end
+    end
+    
+    spawner.step += 1
+    spawner.last_update_time = time()
+  end
+  
 end
 
 __gfx__

@@ -30,6 +30,7 @@ g_player = nil
 
 g_bullets = {}
 g_enemies = {}
+g_spawner = nil
 
 -- 2d matrix containing buildings
 g_map_buildings = {}
@@ -44,18 +45,19 @@ g_map_buildings = {}
   poke(0x5f2c,3)
   
   g_player = create_player(6, 6)
-  create_bullet(0, 6 * 4, 1, 1, {x=1, y=0}, 15, 12)
-  create_enemy(0, 2 * 4, 1, 1,1, {x=1, y=0}, 15, 4, 4)
   create_building(7, 7, 1, building_type.canon)
   g_menu = create_menu()
-  --bullet2 = create_bullet(10, 6 * 4, 1, 1, {x=-1, y=0}, 1, 12)
+  g_spawner = create_spawner()
+  create_level(g_spawner)
 end</function>
       <function name="_update" enabled="1">function _update()
     update_menu(g_menu)
     if (g_in_menu) then return end
     update_player(g_player)
     update_bullets()
+    update_collisions()
     update_enemies()
+    update_spawner(g_spawner)
 end
 
 
@@ -72,6 +74,23 @@ function update_enemies()
   local copy = shallow_copy(g_enemies)
   for e in all(copy) do
     update_enemy(e)
+  end
+end
+
+function update_collisions()
+  local copyB = shallow_copy(g_bullets)
+  for bullet in all(copyB) do
+    local copyE = shallow_copy(g_enemies)
+    for e in all(copyE) do
+      local destroyed = false;
+      if (collide(bullet, e)) then
+        del(g_enemies, e)
+        destroyed = true;
+      end
+      if (destroyed) then
+        del(g_bullets, bullet)
+      end
+    end
   end
 end</function>
       <function name="_draw" enabled="1">function _draw()
@@ -594,7 +613,14 @@ function draw_orientation_menu(menu)
 end</function>
     </entity>
     <entity name="Enemy" enabled="1">
-      <function name="create" enabled="1">function create_enemy(x, y, w, h, hp, direction, speed, right_sprite_id, up_sprite_id)
+      <function name="create" enabled="1">function instanciate_enemy(enemy_type, pos)
+  local copy = shallow_copy(g_enemies_info[enemy_type])
+  copy.pos = pos
+  add(g_enemies, copy)
+  return copy
+end
+
+function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   local enemy = {}
   enemy.pos = {}
   enemy.pos.x = x
@@ -604,12 +630,11 @@ end</function>
   enemy.hitbox.y = 0
   enemy.hitbox.w = w
   enemy.hitbox.h = h
+  enemy.direction = {x = 0, y = 0}
   enemy.hp = hp
   enemy.speed = speed -- pixels per second
-  enemy.direction = direction -- vector2
   enemy.right_sprite_id = right_sprite_id
   enemy.last_update_time = time()
-  add(g_enemies, enemy)
   return enemy
 end
 
@@ -617,9 +642,25 @@ g_enemy_type = {}
 g_enemy_type.basic = 1
 
 g_enemies_info = {}
---g_enemies_info[g_enemy_type.basic] = 
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 1, 2, 3)
 </function>
       <function name="update" enabled="1">function update_enemy(enemy)
+  if (enemy.pos.x - 30 &gt; 0) then
+    enemy.direction.x = -1
+  elseif (enemy.pos.x - 32 &lt; 0) then
+    enemy.direction.x = 1
+  else
+    enemy.direction.x = 0
+  end
+  
+  if (enemy.pos.y - 30 &gt; 0) then
+    enemy.direction.y = -1
+  elseif (enemy.pos.y - 32&lt; 0) then
+    enemy.direction.y = 1
+  else
+    enemy.direction.y = 0
+  end
+    
   if (time() - enemy.last_update_time &gt; 1 / enemy.speed) then
     enemy.last_update_time = time()
     enemy.pos.x += enemy.direction.x
@@ -628,6 +669,46 @@ g_enemies_info = {}
 end</function>
       <function name="draw" enabled="1">function draw_enemy(enemy)
   render_sprite(enemy.sprite_id, enemy.pos.x, enemy.pos.y)
+end</function>
+    </entity>
+    <entity name="Spawner" enabled="1">
+      <function name="create_level" enabled="1">function create_level(spawner)
+  
+  spawn_enemy(1, g_enemy_type.basic, {x=1, y=1}, spawner)
+  
+end</function>
+      <function name="create" enabled="1">function create_spawner()
+  local spawner = {}
+  spawner.enemies_to_spawn = {}
+  spawner.last_update_time = time()
+  spawner.step = 0 -- one step per second
+  return spawner
+end
+
+function spawn_enemy(spawn_step, enemy_type, pos, spawner)
+  if (spawner.enemies_to_spawn[spawn_step]) == nil then
+    spawner.enemies_to_spawn[spawn_step] = {}
+  end
+  add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
+end
+</function>
+      <function name="update" enabled="1">function update_spawner(spawner)
+  
+  -- spawn every seconds
+  if (time() - spawner.last_update_time &gt; 1) then
+    -- spawn enemies
+    local spawn_table = spawner.enemies_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for spawn_enemy_info in all(spawn_table) do
+        if (spawn_enemy_info == nil) then aaa() end
+        instanciate_enemy(spawn_enemy_info.enemy_type, spawn_enemy_info.pos)
+      end
+    end
+    
+    spawner.step += 1
+    spawner.last_update_time = time()
+  end
+  
 end</function>
     </entity>
   </entities>
