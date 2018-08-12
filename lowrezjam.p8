@@ -504,7 +504,13 @@ function on_activate_pressed(menu)
   if (is_in_selection(menu))then
     menu.state = menu_states.building_location
   elseif (is_in_location(menu)) then
-    if (is_buildable(menu.building_tile_pos)) then
+    -- if we selected destroy
+    if get_menu_selected_id(menu) == -1 then
+      local building = g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y]
+      if building != nil then 
+        g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y] = nil
+      end
+    elseif (is_buildable(menu.building_tile_pos)) then
       menu.state = menu_states.building_orientation
     else
       //todo play error
@@ -651,7 +657,7 @@ function draw_selection_menu(menu)
   local pos_x = menu.top_bot_icon_pixels - 1
   local pos_y = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
   local col = menu.highlighted_color
-  if (not can_buy_selected_building(menu)) then col = menu.highlighted_bad_color end   
+  if (not can_buy_selected_building(menu)) then col = menu.highlighted_bad_color end
   rectfill(pos_x, pos_y, pos_x + tile_size + 1 + menu.width_for_money , pos_y + tile_size + 1, col)
   
   -- draw the building icons 
@@ -677,7 +683,7 @@ function draw_selection_menu(menu)
       local price  = g_buildings_info[building_id].price
       draw_money({x= pos_x, y=pos_y}, price)
     else
-      print("del", pos_x, pos_y, 7)
+      --print("del", pos_x, pos_y, 7)
     end  
   end
   
@@ -688,7 +694,15 @@ function draw_location_menu(menu)
     render_tiled_sprite(65, menu.building_tile_pos.x, menu.building_tile_pos.y)
   else
     render_tiled_sprite(66, menu.building_tile_pos.x, menu.building_tile_pos.y)
-  end  
+  end
+  if get_menu_selected_id(menu) == -1 then
+    local building = g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y]
+    if building != nil then 
+      render_tiled_sprite(65, menu.building_tile_pos.x, menu.building_tile_pos.y)
+    else
+      render_tiled_sprite(66, menu.building_tile_pos.x, menu.building_tile_pos.y)
+    end
+  end
 end
 
 function draw_orientation_menu(menu)
