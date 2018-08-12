@@ -17,7 +17,7 @@ g_in_menu = false;
 g_player = nil
 g_spawner = nil
 g_tobro_window = nil
-g_money = 10
+g_money = 5
 
 g_bullets = {}
 g_enemies = {}
@@ -130,7 +130,6 @@ function draw_enemies()
 end
 
 function draw_spawn_zones()
-  print(#g_spawn_zones)
   for e in all(g_spawn_zones) do
     draw_spawn_zone(e)
   end
@@ -382,7 +381,7 @@ g_building_canon = {}
   g_building_canon.vertical_sprite_id = 3
   g_building_canon.hor_sprite_id_reload = 10
   g_building_canon.ver_sprite_id_reload = 11
-  g_building_canon.cooldown = 1 -- time in sec
+  g_building_canon.cooldown = 5 -- time in sec
   g_building_canon.activate = function (_building)
     if not _building.is_ready then return end
     on_activate(_building)
@@ -768,6 +767,12 @@ end
 
 --Spawner
 function create_level(spawner)
+  
+  -- before start
+  
+  create_building(6, 7, e_orientation.left, building_type.canon) 
+  -- at start
+  
   local s1 = {x=0* tile_size, y=7* tile_size};
   spawn_zone(2, s1, spawner)
   spawn_enemy(3, g_enemy_type.basic, s1, spawner)
@@ -775,10 +780,17 @@ function create_level(spawner)
   local s2 = {x=7 * tile_size, y=0* tile_size}
   spawn_zone(5, s2, spawner)
   spawn_enemy(6, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(9, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(10, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(14, g_enemy_type.basic, s1, spawner)
   
   local s3 = {x=15* tile_size, y=7* tile_size}
-  spawn_zone(9, s3, spawner)
-  spawn_enemy(10, g_enemy_type.basic, s3, spawner)
+  spawn_zone(10, s3, spawner)
+  spawn_enemy(17, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(20, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(20, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(24, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(26, g_enemy_type.basic, s2, spawner)
   
 end
 
