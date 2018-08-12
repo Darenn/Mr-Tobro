@@ -420,8 +420,9 @@ end</function>
     menu.window_color = 1
     menu.between_icon_pixels = 2
     menu.top_bot_icon_pixels = 2
-    menu.window_width = #menu.items*tile_size + (#menu.items+1)*menu.between_icon_pixels
-    menu.window_height = menu.top_bot_icon_pixels*2 + tile_size
+    menu.width_for_money = 16
+    menu.window_height = #menu.items*tile_size + (#menu.items+1)*menu.between_icon_pixels
+    menu.window_width = menu.top_bot_icon_pixels*2 + tile_size + menu.width_for_money
     menu.state = menu_states.building_selection
     menu.building_tile_pos = {x=6, y=6}
     menu.building_orientation = e_orientation.right
@@ -492,9 +493,7 @@ end
   
 
 function on_left_arrow_pressed(menu)
-  if (is_in_selection(menu))then
-    move_selection_left(menu)
-  elseif (is_in_location(menu)) then
+  if (is_in_location(menu)) then
     move_location_left(menu)
   elseif (is_in_orientation(menu)) then
     orientate_building_leftward(menu)
@@ -502,9 +501,7 @@ function on_left_arrow_pressed(menu)
 end
 
 function on_right_arrow_pressed(menu)
-  if (is_in_selection(menu))then
-    move_selection_right(menu)
-  elseif (is_in_location(menu)) then
+  if (is_in_location(menu)) then
     move_location_right(menu)
   elseif (is_in_orientation(menu)) then
     orientate_building_rightward(menu)
@@ -512,7 +509,9 @@ function on_right_arrow_pressed(menu)
 end
 
 function on_up_arrow_pressed(menu)
-  if (is_in_location(menu)) then
+  if (is_in_selection(menu))then
+    move_selection_up(menu)
+  elseif (is_in_location(menu)) then
     move_location_up(menu)
   elseif (is_in_orientation(menu)) then
     orientate_building_upward(menu)
@@ -520,7 +519,9 @@ function on_up_arrow_pressed(menu)
 end
 
 function on_down_arrow_pressed(menu)
-  if (is_in_location(menu)) then
+  if (is_in_selection(menu))then
+    move_selection_down(menu)
+  elseif (is_in_location(menu)) then
     move_location_down(menu)
   elseif (is_in_orientation(menu)) then
     orientate_building_downward(menu)
@@ -533,14 +534,14 @@ function build_building(menu)
   create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
 end
 
-function move_selection_left(menu)
+function move_selection_up(menu)
   menu.item_selected_index -= 1
   if (menu.item_selected_index &lt; 0) then 
     menu.item_selected_index = 0 
   end
 end
 
-function move_selection_right(menu)
+function move_selection_down(menu)
   menu.item_selected_index += 1
     if (menu.item_selected_index &gt;= #menu.items-1) then 
       menu.item_selected_index = #menu.items-1
@@ -605,28 +606,41 @@ end
   
 function draw_selection_menu(menu)
   -- Draw the window background
-  rectfill(0, 0, menu.window_width - 1, menu.window_height - 1, menu.window_color)  
+  rectfill(0, 0, menu.window_width - 1, menu.window_height - 1, menu.window_color)
+  rectfill(0, 0, menu.window_width, menu.window_height, 6)  
     
   -- Draw the highlighted building (the selected one)
-  local pos_y = menu.top_bot_icon_pixels - 1
-  local pos_x = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
-  if (can_buy_selected_building(menu)) then
-    rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_color)
-  else
-    rectfill(pos_x, pos_y, pos_x + tile_size + 1, pos_y + tile_size + 1, menu.highlighted_bad_color)
-  end
-  -- Draw the building icons
-  local pos_y = menu.top_bot_icon_pixels
+  local pos_x = menu.top_bot_icon_pixels - 1
+  local pos_y = menu.between_icon_pixels*(menu.item_selected_index+1) + tile_size*menu.item_selected_index - 1
+  local col = menu.highlighted_color
+  if (not can_buy_selected_building(menu)) then col = menu.highlighted_bad_color end   
+  rectfill(pos_x, pos_y, pos_x + tile_size + 1 + menu.width_for_money , pos_y + tile_size + 1, col)
+  
+  -- Draw the building icons 
+  local pos_x = menu.between_icon_pixels
   for i=0, #menu.items - 1 do
-    local pos_x = menu.between_icon_pixels*(i+1) + tile_size*i
+    local pos_y = menu.top_bot_icon_pixels*(i+1) + tile_size*i
     local sprite_id
-    if i == 0 then sprite_id = 1
+    if i == 0 then sprite_id = 69
     else
       building_id = menu.items[i + 1]
       sprite_id  = g_buildings_info[building_id].horizontal_sprite_id
     end
     render_sprite(sprite_id, pos_x, pos_y)    
   end
+  
+  -- Draw the money
+  local pos_x = 5 + menu.between_icon_pixels
+  for i=0, #menu.items - 1 do
+    local pos_y = menu.top_bot_icon_pixels*(i+1) + tile_size*i
+    local sprite_id
+    if i != 0 then 
+      local building_id = menu.items[i + 1]
+      local price  = g_buildings_info[building_id].price
+      draw_money({x= pos_x, y=pos_y}, price)
+    end  
+  end
+  
 end
 
 function draw_location_menu(menu)
@@ -641,6 +655,12 @@ function draw_orientation_menu(menu)
   local building = g_buildings_info[get_menu_selected_id(menu)]
   render_tiled_sprite(65, menu.building_tile_pos.x, menu.building_tile_pos.y)
   render_tiled_sprite(building.horizontal_sprite_id, menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, building.vertical_sprite_id)
+end
+
+function draw_money(pos, amount)
+  spr(68, pos.x + 9, pos.y + 1)
+  if amount &gt; 9 then print(amount, pos.x, pos.y, 7)
+  else print(amount, pos.x + 2, pos.y, 7) end
 end</function>
     </entity>
     <entity name="Enemy" enabled="1">
@@ -811,9 +831,11 @@ end
 
 
 function draw_price()
-  rectfill(48, 0, 64, 7, 2)
+  rectfill(49, 0, 64, 6, 1)
   spr(68, 59, 2)
-  print(g_money, 50, 1)
+  if g_money &gt; 9 then print(g_money, 50, 1, 7)
+  else print(g_money, 52, 1, 7) end
+  
 end</function>
     </entity>
   </entities>
