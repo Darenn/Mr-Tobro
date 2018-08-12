@@ -642,7 +642,7 @@ g_enemy_type = {}
 g_enemy_type.basic = 1
 
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 1, 2, 3)
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 1, 1, 1, 0.5, 2, 3)
 </function>
       <function name="update" enabled="1">function update_enemy(enemy)
   if (enemy.pos.x - 30 &gt; 0) then
@@ -680,6 +680,7 @@ end</function>
       <function name="create" enabled="1">function create_spawner()
   local spawner = {}
   spawner.enemies_to_spawn = {}
+  spawner.zone_to_spawn = {}
   spawner.last_update_time = time()
   spawner.step = 0 -- one step per second
   return spawner
@@ -691,6 +692,14 @@ function spawn_enemy(spawn_step, enemy_type, pos, spawner)
   end
   add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
 end
+
+function spawn_zone(pos)
+  if (spawner.zone_to_spawn[spawn_step]) == nil then
+    spawner.zone_to_spawn[spawn_step] = {}
+  end
+  add(spawner.zone_to_spawn[spawn_step], {pos = pos})
+end
+  
 </function>
       <function name="update" enabled="1">function update_spawner(spawner)
   
@@ -700,8 +709,15 @@ end
     local spawn_table = spawner.enemies_to_spawn[spawner.step]
     if (spawn_table != nil) then
       for spawn_enemy_info in all(spawn_table) do
-        if (spawn_enemy_info == nil) then aaa() end
         instanciate_enemy(spawn_enemy_info.enemy_type, spawn_enemy_info.pos)
+      end
+    end
+    
+    -- spawn zones
+    local spawn_table = spawner.zone_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for zone in all(spawn_table) do
+        
       end
     end
     
@@ -709,6 +725,18 @@ end
     spawner.last_update_time = time()
   end
   
+end</function>
+    </entity>
+    <entity name="SpawnZone" enabled="1">
+      <function name="create" enabled="1">function create_spawn_zone(pos, sprite_id)
+  local zone = {}
+  zone.pos = pos
+  zone.sprite_id = sprite_id
+end</function>
+      <function name="update" enabled="1">function update_spawn_zone()
+end</function>
+      <function name="draw" enabled="1">function draw_spawn_zone(zone)
+  render_sprite(zone.sprite_id, zone.pos.x, zone.pos.y)
 end</function>
     </entity>
   </entities>

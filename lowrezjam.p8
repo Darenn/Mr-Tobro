@@ -15,10 +15,12 @@ deltatime = 1/30 -- because we're running at 30 fps
 g_in_menu = false;
 
 g_player = nil
+g_spawner = nil
 
 g_bullets = {}
 g_enemies = {}
-g_spawner = nil
+g_spawn_zones = {}
+
 
 -- 2d matrix containing buildings
 g_map_buildings = {}
@@ -90,7 +92,8 @@ function _draw()
   draw_player(g_player)
   draw_buildings()
   draw_bullets()
-  draw_enemies()
+  draw_spawn_zones()
+  draw_enemies()  
   if (g_in_menu) then
     draw_menu(g_menu)
   end
@@ -108,6 +111,11 @@ function draw_enemies()
   end
 end
 
+function draw_spawn_zones()
+  for e in all(g_spawn_zones) do
+    draw_spawn_zone(e)
+  end
+end
 
 function draw_buildings()
   for x=0, g_row_tiles_count do
@@ -676,12 +684,13 @@ end
 function create_level(spawner)
   
   spawn_enemy(1, g_enemy_type.basic, {x=1, y=1}, spawner)
-  
+  spawn_zone(2, {x=4, y=4}, spawner)
 end
 
 function create_spawner()
   local spawner = {}
   spawner.enemies_to_spawn = {}
+  spawner.zone_to_spawn = {}
   spawner.last_update_time = time()
   spawner.step = 0 -- one step per second
   return spawner
@@ -694,6 +703,14 @@ function spawn_enemy(spawn_step, enemy_type, pos, spawner)
   add(spawner.enemies_to_spawn[spawn_step], {enemy_type = enemy_type, pos = pos})
 end
 
+function spawn_zone(spawn_step, pos, spawner)
+  if (spawner.zone_to_spawn[spawn_step]) == nil then
+    spawner.zone_to_spawn[spawn_step] = {}
+  end
+  add(spawner.zone_to_spawn[spawn_step], {pos = pos})
+end
+  
+
 
 function update_spawner(spawner)
   
@@ -703,8 +720,15 @@ function update_spawner(spawner)
     local spawn_table = spawner.enemies_to_spawn[spawner.step]
     if (spawn_table != nil) then
       for spawn_enemy_info in all(spawn_table) do
-        if (spawn_enemy_info == nil) then aaa() end
         instanciate_enemy(spawn_enemy_info.enemy_type, spawn_enemy_info.pos)
+      end
+    end
+    
+    -- spawn zones
+    local spawn_table = spawner.zone_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for zone in all(spawn_table) do
+        create_spawn_zone(zone.pos)
       end
     end
     
@@ -712,6 +736,23 @@ function update_spawner(spawner)
     spawner.last_update_time = time()
   end
   
+end
+
+--SpawnZone
+function create_spawn_zone(pos, sprite_id)
+  sprite_id = sprite_id or 14
+  local zone = {}
+  zone.pos = pos
+  zone.sprite_id = sprite_id
+  add(g_spawn_zones, zone)
+  return zone
+end
+
+function update_spawn_zone()
+end
+
+function draw_spawn_zone(zone)
+  render_sprite(zone.sprite_id, zone.pos.x, zone.pos.y)
 end
 
 __gfx__
