@@ -29,7 +29,9 @@ g_in_menu = false;
 g_player = nil
 g_spawner = nil
 g_tobro_window = nil
-g_money = 50
+g_money = 5
+g_hp = 5
+g_game_over = false
 
 g_bullets = {}
 g_enemies = {}
@@ -44,7 +46,11 @@ g_map_buildings = {}
       g_map_buildings[x][y] = nil
     end
   end
-  </function>
+  
+function game_over() 
+  g_game_over = true
+  music(g_sound_manager.patterns.window_xp_outro)
+end</function>
       <function name="_init" enabled="1">function _init()
   -- make the game in 64x64
   poke(0x5f2c,3)
@@ -54,11 +60,11 @@ g_map_buildings = {}
   g_spawner = create_spawner()
   g_tobro_window = create_tobro_window({x=6,y=6},4,4)
   create_level(g_spawner)
-  music(1)
+  --music(g_sound_manager.patterns.window_xp_intro)
 end</function>
       <function name="_update" enabled="1">function _update()
     update_menu(g_menu)
-    if (g_in_menu) then return end
+    if (g_in_menu or g_game_over) then return end
     update_buildings()
     update_player(g_player)
     update_bullets()
@@ -115,15 +121,22 @@ end</function>
   cls()
   map(0, 0, 0, 0, 8, 8)
   draw_tobro_window(g_tobro_window)
+
+
+  draw_spawn_zones()
+  draw_enemies()
   draw_player(g_player)
   draw_buildings()
-  draw_spawn_zones()
   draw_bullets()
-  draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
   end
   draw_UI()
+  
+  if g_game_over then
+    print("Game Over", 14, 17, 14)
+    print("Press x", 19, 46, 14)
+  end
 end
 
 function draw_bullets()
@@ -133,7 +146,7 @@ function draw_bullets()
 end
 
 function draw_enemies()
-  for i=#g_enemies - 1, 1, -1 do
+  for i=#g_enemies, 1, -1 do
     draw_enemy(g_enemies[i])
   end
 end
@@ -264,10 +277,9 @@ function is_walkable(x, y)
   return mget(x / 2, y / 2) == walkable_tile
 end
 
-function is_walkable(position)
-  --return mget(position.x / 2, position.y / 2) == walkable_tile
-  local pos = {x = position.x / 2, y = position.y /2}
-  return is_in_tobro_window(g_tobro_window, position)
+function is_walkable(tile_position)
+  local is_in_core = tile_position.x &gt;= 7 and tile_position.x &lt;= 8 and tile_position.y &gt;= 7 and tile_position.y &lt;= 8
+  return is_in_tobro_window(g_tobro_window, tile_position) and not is_in_core
 end
 
 function collide(obj, other)
@@ -323,6 +335,7 @@ function shallow_copy(orig)
     end
     return copy
 end
+
 
 </function>
     </entity>
@@ -591,6 +604,7 @@ menu_states.building_orientation = 3;
 </function>
       <function name="update" enabled="1">function update_menu(menu)
   if (btnp(5)) then
+    if (g_game_over) then run() end
     on_menu_pressed(menu)
   end
   if (not g_in_menu) then return end
@@ -853,7 +867,7 @@ end</function>
   return copy
 end
 
-function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
+function create_info_enemy(x, y, w, h, hp, price, speed, right_sprite_id, up_sprite_id)
   local enemy = {}
   enemy.pos = {}
   enemy.pos.x = x
@@ -869,12 +883,13 @@ function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   enemy.right_sprite_id = right_sprite_id
   enemy.up_sprite_id = up_sprite_id
   enemy.last_update_time = time()
+  enemy.price = price
   return enemy
 end
 
 function kill(enemy)          
   del(g_enemies, enemy)
-  g_money += 1
+  g_money += enemy.price
   sfx(g_sound_manager.sfx_list.basic_enemy_dies)
 end
 
@@ -884,9 +899,9 @@ g_enemy_type.fast = 2
 g_enemy_type.big = 3
 
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 0.75, 8, 8)
-g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 1.5, 16, 16)
-g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 1, 0.5, 17, 17)
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 1, 0.75, 8, 8)
+g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 2, 1.5, 16, 16)
+g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 6, 5, 0.5, 17, 17)
 </function>
       <function name="update" enabled="1">function update_enemy(enemy)
   if (enemy.pos.x - 28 &gt; 0) then
@@ -904,6 +919,12 @@ g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 1, 0.5, 17, 17)
   else
     enemy.direction.y = 0
   end
+  
+  -- the enemy is in the middle
+  if(enemy.direction.y == 0 and enemy.direction.x == 0) then
+    lost_hp()
+    kill(enemy)
+  end
     
   if (time() - enemy.last_update_time &gt; 1 / enemy.speed) then
     enemy.last_update_time = time()
@@ -918,39 +939,241 @@ end</function>
     <entity name="Spawner" enabled="1">
       <function name="create_level" enabled="1">function create_level(spawner)
   
+  -- IDEA
+  -- make the ennemies pop in circle so that the player can streak them
+  
   -- Before start
   
   create_building(6, 7, e_orientation.left, building_type.canon) 
+  
+  
+  -- Advices
+  -- 3 seconds between basics on same spot(to see them)
   -- At start
   
-  local s1 = {x=0* tile_size, y=7* tile_size};
-  spawn_zone(2, s1, spawner)
-  spawn_enemy(3, g_enemy_type.basic, s1, spawner)
+  -- Tutorial
   
-  local s2 = {x=7 * tile_size, y=0* tile_size}
-  spawn_zone(5, s2, spawner)
-  spawn_enemy(6, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(9, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(10, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(14, g_enemy_type.basic, s1, spawner)
+  local s1 = {x=0* tile_size, y=7* tile_size}; -- midleft
+  spawn_zone(3, s1, spawner)
+  spawn_enemy(6, g_enemy_type.basic, s1, spawner)
   
-  local s3 = {x=15* tile_size, y=7* tile_size}
+  local s2 = {x=7 * tile_size, y=0* tile_size} -- midtop
+  spawn_zone(10, s2, spawner)
+  spawn_enemy(10, g_enemy_type.basic, s1, spawner)
+  
+  -- To anounce the arrival of enemies on the right
+  local s3 = {x=15* tile_size, y=7* tile_size} -- midright
   spawn_zone(10, s3, spawner)
-  spawn_enemy(17, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(13, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(16, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(13, g_enemy_type.basic, s1, spawner)
+  
+  -- enough money to build a third canon
+  spawn_enemy(18, g_enemy_type.basic, s3, spawner)
   spawn_enemy(20, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(20, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(22, g_enemy_type.basic, s2, spawner)
   spawn_enemy(24, g_enemy_type.basic, s3, spawner)
   spawn_enemy(26, g_enemy_type.basic, s2, spawner)
   
+  -- learn about faster enemies
+  spawn_enemy(30, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(30, g_enemy_type.basic, s1, spawner)
   
-  spawn_enemy(3, g_enemy_type.fast, s2, spawner)
-  spawn_enemy(3, g_enemy_type.big, s3, spawner)
+  -- End tutorial 34 s
+  -- Enough to build a fourth canon 
+  -- 3 golds
+  local s4 = {x=7 * tile_size, y=15* tile_size} -- midbot
+  spawn_zone(31, s4, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s4, spawner)
+  
+  -- 19 golds
+  -- Buy a new canon
+  local s5 = {x=9 * tile_size, y=15* tile_size} -- midbot
+  spawn_zone(45, s5, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s5, spawner)
+  
+  spawn_enemy(54, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(54, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(54, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(55, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(55, g_enemy_type.fast, s2, spawner)
+  
+  
+  -- 26 golds
+  -- Might want to try a multiple canon
+  local s6 = {x=0 * tile_size, y=8* tile_size} -- midbot
+  spawn_zone(60, s6, spawner)
+  local s7 = {x=15 * tile_size, y=8* tile_size} -- midbot
+  spawn_zone(60, s7, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s5, spawner)
+  
+  spawn_enemy(67, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(67, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(67, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s5, spawner)
+  
+  
+  -- 20 golds
+  -- Show the big 
+  spawn_enemy(78, g_enemy_type.big, s6, spawner)
+  
+  -- Try for force him realize enemies on the diagonals are hard to hit
+  local s8 = {x=15 * tile_size, y=4* tile_size} -- rightmidup
+  spawn_zone(84, s8, spawner)
+  local s9 = {x=0 * tile_size, y=4* tile_size} -- leftmidup
+  spawn_zone(88, s9, spawner)
+  
+  spawn_enemy(94, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s4, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(94, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(94, g_enemy_type.basic, s9, spawner)
+  
+  spawn_enemy(99, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s7, spawner)
+  
+  -- 48 golds
+  spawn_growth(110, 4, 8, spawner)
+  
+  spawn_enemy(117, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s4, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(113, g_enemy_type.fast, s9, spawner)
+  
+  -- 66 golds
+  local s10 = {x=0 * tile_size, y=12* tile_size} -- leftmidup
+  spawn_zone(115, s10, spawner)
+  local s11 = {x=15 * tile_size, y=12* tile_size} -- leftmidup
+  spawn_zone(119, s11, spawner)
+  
+  spawn_enemy(125, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(125, g_enemy_type.big, s4, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s9, spawner)
+  
+  spawn_enemy(138, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s11, spawner)
+  
+  spawn_enemy(148, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(148, g_enemy_type.big, s7, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s11, spawner)
+  
+  local s12 = {x=15 * tile_size, y=5* tile_size} -- leftmidup
+  spawn_zone(145, s12, spawner)
+  local s13 = {x=0 * tile_size, y=5* tile_size} -- leftmidup
+  spawn_zone(150, s13, spawner)
+  
+  spawn_enemy(158, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s9, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s11, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s13, spawner)
+  
+  spawn_enemy(168, g_enemy_type.big, s1, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s11, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s13, spawner)
+  
+  local s14 = {x=0 * tile_size, y=10* tile_size} -- leftmidup
+  spawn_zone(172, s14, spawner)
+  local s15 = {x=6 * tile_size, y=0* tile_size} -- leftmidup
+  spawn_zone(175, s15, spawner)
+  
+  spawn_enemy(178, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(178, g_enemy_type.big, s7, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s11, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s13, spawner)
+  
   
 end</function>
       <function name="create" enabled="1">function create_spawner()
   local spawner = {}
   spawner.enemies_to_spawn = {}
   spawner.zone_to_spawn = {}
+  spawner.growth_to_spawn = {}
   spawner.last_update_time = time()
   spawner.step = 0 -- one step per second
   return spawner
@@ -968,6 +1191,13 @@ function spawn_zone(spawn_step, pos, spawner)
     spawner.zone_to_spawn[spawn_step] = {}
   end
   add(spawner.zone_to_spawn[spawn_step], {pos = pos})
+end
+  
+function spawn_growth(spawn_step, tile_w, tile_h, spawner)
+  if (spawner.growth_to_spawn[spawn_step]) == nil then
+    spawner.growth_to_spawn[spawn_step] = {}
+  end
+  add(spawner.growth_to_spawn[spawn_step], {tile_w = tile_w, tile_h = tile_h})
 end
   
 </function>
@@ -988,6 +1218,19 @@ end
     if (spawn_table != nil) then
       for zone in all(spawn_table) do
         create_spawn_zone(zone.pos)
+      end
+    end
+    
+    -- spawn growth
+    local spawn_table = spawner.growth_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for growth in all(spawn_table) do
+        local xoffset = (growth.tile_w-g_tobro_window.tile_w) / 2
+        local yoffset = (growth.tile_h-g_tobro_window.tile_h) / 2
+        g_tobro_window.tile_w = growth.tile_w
+        g_tobro_window.tile_h = growth.tile_h
+        g_tobro_window.tile_pos.x -= xoffset
+        g_tobro_window.tile_pos.y -= yoffset
       end
     end
     
@@ -1034,12 +1277,24 @@ function is_in_tobro_window(win, tile_pos)
   end
 end</function>
       <function name="update" enabled="1">function update_tobro_window()
+end
+
+function lost_hp()
+  g_hp -=1
+  if g_hp &lt;= 0 then
+    g_hp = 0
+    game_over()
+  end
 end</function>
       <function name="draw" enabled="1">function draw_tobro_window(win)
   local p_pos = get_pixel_pos(win.tile_pos.x, win.tile_pos.y)
   local p_poswh = get_pixel_pos(win.tile_pos.x+ win.tile_w, win.tile_pos.y + win.tile_h)
   rectfill(p_pos.x - 1, p_pos.y - 1, p_poswh.x, p_poswh.y, 6)
   rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
+  
+  -- Draw core
+  local hp_sprite = {77, 76, 75, 74, 73, 72}
+  spr(hp_sprite[g_hp + 1], 28, 28)
 end</function>
     </entity>
     <entity name="UI" enabled="1">

@@ -17,7 +17,9 @@ g_in_menu = false;
 g_player = nil
 g_spawner = nil
 g_tobro_window = nil
-g_money = 50
+g_money = 5
+g_hp = 5
+g_game_over = false
 
 g_bullets = {}
 g_enemies = {}
@@ -33,6 +35,10 @@ g_map_buildings = {}
     end
   end
   
+function game_over() 
+  g_game_over = true
+  music(g_sound_manager.patterns.window_xp_outro)
+end
 
 function _init()
   -- make the game in 64x64
@@ -43,12 +49,12 @@ function _init()
   g_spawner = create_spawner()
   g_tobro_window = create_tobro_window({x=6,y=6},4,4)
   create_level(g_spawner)
-  music(1)
+  --music(g_sound_manager.patterns.window_xp_intro)
 end
 
 function _update()
     update_menu(g_menu)
-    if (g_in_menu) then return end
+    if (g_in_menu or g_game_over) then return end
     update_buildings()
     update_player(g_player)
     update_bullets()
@@ -106,15 +112,22 @@ function _draw()
   cls()
   map(0, 0, 0, 0, 8, 8)
   draw_tobro_window(g_tobro_window)
+
+
+  draw_spawn_zones()
+  draw_enemies()
   draw_player(g_player)
   draw_buildings()
-  draw_spawn_zones()
   draw_bullets()
-  draw_enemies()
   if (g_in_menu) then
     draw_menu(g_menu)
   end
   draw_ui()
+  
+  if g_game_over then
+    print("game over", 14, 17, 14)
+    print("press x", 19, 46, 14)
+  end
 end
 
 function draw_bullets()
@@ -124,11 +137,8 @@ function draw_bullets()
 end
 
 function draw_enemies()
-  for i=#g_enemies - 1, 1, -1 do
+  for i=#g_enemies, 1, -1 do
     draw_enemy(g_enemies[i])
-  end
-  for e in all(g_enemies) do
- --   draw_enemy(e)
   end
 end
 
@@ -260,10 +270,9 @@ function is_walkable(x, y)
   return mget(x / 2, y / 2) == walkable_tile
 end
 
-function is_walkable(position)
-  --return mget(position.x / 2, position.y / 2) == walkable_tile
-  local pos = {x = position.x / 2, y = position.y /2}
-  return is_in_tobro_window(g_tobro_window, position)
+function is_walkable(tile_position)
+  local is_in_core = tile_position.x >= 7 and tile_position.x <= 8 and tile_position.y >= 7 and tile_position.y <= 8
+  return is_in_tobro_window(g_tobro_window, tile_position) and not is_in_core
 end
 
 function collide(obj, other)
@@ -319,6 +328,7 @@ function shallow_copy(orig)
     end
     return copy
 end
+
 
 
 
@@ -592,6 +602,7 @@ menu_states.building_orientation = 3;
 
 function update_menu(menu)
   if (btnp(5)) then
+    if (g_game_over) then run() end
     on_menu_pressed(menu)
   end
   if (not g_in_menu) then return end
@@ -855,7 +866,7 @@ function instanciate_enemy(enemy_type, pos)
   return copy
 end
 
-function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
+function create_info_enemy(x, y, w, h, hp, price, speed, right_sprite_id, up_sprite_id)
   local enemy = {}
   enemy.pos = {}
   enemy.pos.x = x
@@ -871,12 +882,13 @@ function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   enemy.right_sprite_id = right_sprite_id
   enemy.up_sprite_id = up_sprite_id
   enemy.last_update_time = time()
+  enemy.price = price
   return enemy
 end
 
 function kill(enemy)          
   del(g_enemies, enemy)
-  g_money += 1
+  g_money += enemy.price
   sfx(g_sound_manager.sfx_list.basic_enemy_dies)
 end
 
@@ -886,9 +898,9 @@ g_enemy_type.fast = 2
 g_enemy_type.big = 3
 
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 0.75, 8, 8)
-g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 1.5, 16, 16)
-g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 1, 0.5, 17, 17)
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 1, 0.75, 8, 8)
+g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 2, 1.5, 16, 16)
+g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 6, 5, 0.5, 17, 17)
 
 
 function update_enemy(enemy)
@@ -907,6 +919,12 @@ function update_enemy(enemy)
   else
     enemy.direction.y = 0
   end
+  
+  -- the enemy is in the middle
+  if(enemy.direction.y == 0 and enemy.direction.x == 0) then
+    lost_hp()
+    kill(enemy)
+  end
     
   if (time() - enemy.last_update_time > 1 / enemy.speed) then
     enemy.last_update_time = time()
@@ -922,33 +940,234 @@ end
 --Spawner
 function create_level(spawner)
   
+  -- idea
+  -- make the ennemies pop in circle so that the player can streak them
+  
   -- before start
   
   create_building(6, 7, e_orientation.left, building_type.canon) 
+  
+  
+  -- advices
+  -- 3 seconds between basics on same spot(to see them)
   -- at start
   
-  local s1 = {x=0* tile_size, y=7* tile_size};
-  spawn_zone(2, s1, spawner)
-  spawn_enemy(3, g_enemy_type.basic, s1, spawner)
+  -- tutorial
   
-  local s2 = {x=7 * tile_size, y=0* tile_size}
-  spawn_zone(5, s2, spawner)
-  spawn_enemy(6, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(9, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(10, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(14, g_enemy_type.basic, s1, spawner)
+  local s1 = {x=0* tile_size, y=7* tile_size}; -- midleft
+  spawn_zone(3, s1, spawner)
+  spawn_enemy(6, g_enemy_type.basic, s1, spawner)
   
-  local s3 = {x=15* tile_size, y=7* tile_size}
+  local s2 = {x=7 * tile_size, y=0* tile_size} -- midtop
+  spawn_zone(10, s2, spawner)
+  spawn_enemy(10, g_enemy_type.basic, s1, spawner)
+  
+  -- to anounce the arrival of enemies on the right
+  local s3 = {x=15* tile_size, y=7* tile_size} -- midright
   spawn_zone(10, s3, spawner)
-  spawn_enemy(17, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(13, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(16, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(13, g_enemy_type.basic, s1, spawner)
+  
+  -- enough money to build a third canon
+  spawn_enemy(18, g_enemy_type.basic, s3, spawner)
   spawn_enemy(20, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(20, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(22, g_enemy_type.basic, s2, spawner)
   spawn_enemy(24, g_enemy_type.basic, s3, spawner)
   spawn_enemy(26, g_enemy_type.basic, s2, spawner)
   
+  -- learn about faster enemies
+  spawn_enemy(30, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(30, g_enemy_type.basic, s1, spawner)
   
-  spawn_enemy(3, g_enemy_type.fast, s2, spawner)
-  spawn_enemy(3, g_enemy_type.big, s3, spawner)
+  -- end tutorial 34 s
+  -- enough to build a fourth canon 
+  -- 3 golds
+  local s4 = {x=7 * tile_size, y=15* tile_size} -- midbot
+  spawn_zone(31, s4, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(35, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(38, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(44, g_enemy_type.fast, s4, spawner)
+  
+  -- 19 golds
+  -- buy a new canon
+  local s5 = {x=9 * tile_size, y=15* tile_size} -- midbot
+  spawn_zone(45, s5, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(50, g_enemy_type.basic, s5, spawner)
+  
+  spawn_enemy(54, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(54, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(54, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(55, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(55, g_enemy_type.fast, s2, spawner)
+  
+  
+  -- 26 golds
+  -- might want to try a multiple canon
+  local s6 = {x=0 * tile_size, y=8* tile_size} -- midbot
+  spawn_zone(60, s6, spawner)
+  local s7 = {x=15 * tile_size, y=8* tile_size} -- midbot
+  spawn_zone(60, s7, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(62, g_enemy_type.basic, s5, spawner)
+  
+  spawn_enemy(67, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(67, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(67, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(70, g_enemy_type.basic, s5, spawner)
+  
+  
+  -- 20 golds
+  -- show the big 
+  spawn_enemy(78, g_enemy_type.big, s6, spawner)
+  
+  -- try for force him realize enemies on the diagonals are hard to hit
+  local s8 = {x=15 * tile_size, y=4* tile_size} -- rightmidup
+  spawn_zone(84, s8, spawner)
+  local s9 = {x=0 * tile_size, y=4* tile_size} -- leftmidup
+  spawn_zone(88, s9, spawner)
+  
+  spawn_enemy(94, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s4, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(94, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(94, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(94, g_enemy_type.basic, s9, spawner)
+  
+  spawn_enemy(99, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(99, g_enemy_type.basic, s7, spawner)
+  
+  -- 48 golds
+  spawn_growth(110, 4, 8, spawner)
+  
+  spawn_enemy(117, g_enemy_type.fast, s1, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s4, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(117, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(113, g_enemy_type.fast, s9, spawner)
+  
+  -- 66 golds
+  local s10 = {x=0 * tile_size, y=12* tile_size} -- leftmidup
+  spawn_zone(115, s10, spawner)
+  local s11 = {x=15 * tile_size, y=12* tile_size} -- leftmidup
+  spawn_zone(119, s11, spawner)
+  
+  spawn_enemy(125, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(125, g_enemy_type.big, s4, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(125, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(125, g_enemy_type.fast, s9, spawner)
+  
+  spawn_enemy(138, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(138, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(138, g_enemy_type.basic, s11, spawner)
+  
+  spawn_enemy(148, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(148, g_enemy_type.big, s7, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(148, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(148, g_enemy_type.fast, s11, spawner)
+  
+  local s12 = {x=15 * tile_size, y=5* tile_size} -- leftmidup
+  spawn_zone(145, s12, spawner)
+  local s13 = {x=0 * tile_size, y=5* tile_size} -- leftmidup
+  spawn_zone(150, s13, spawner)
+  
+  spawn_enemy(158, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(158, g_enemy_type.fast, s9, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s11, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(158, g_enemy_type.basic, s13, spawner)
+  
+  spawn_enemy(168, g_enemy_type.big, s1, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s7, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s8, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s11, spawner)
+  spawn_enemy(168, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(168, g_enemy_type.fast, s13, spawner)
+  
+  local s14 = {x=0 * tile_size, y=10* tile_size} -- leftmidup
+  spawn_zone(172, s14, spawner)
+  local s15 = {x=6 * tile_size, y=0* tile_size} -- leftmidup
+  spawn_zone(175, s15, spawner)
+  
+  spawn_enemy(178, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s5, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s6, spawner)
+  spawn_enemy(178, g_enemy_type.big, s7, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s8, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s9, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s10, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s11, spawner)
+  spawn_enemy(178, g_enemy_type.basic, s12, spawner)
+  spawn_enemy(178, g_enemy_type.fast, s13, spawner)
+  
   
 end
 
@@ -956,6 +1175,7 @@ function create_spawner()
   local spawner = {}
   spawner.enemies_to_spawn = {}
   spawner.zone_to_spawn = {}
+  spawner.growth_to_spawn = {}
   spawner.last_update_time = time()
   spawner.step = 0 -- one step per second
   return spawner
@@ -973,6 +1193,13 @@ function spawn_zone(spawn_step, pos, spawner)
     spawner.zone_to_spawn[spawn_step] = {}
   end
   add(spawner.zone_to_spawn[spawn_step], {pos = pos})
+end
+  
+function spawn_growth(spawn_step, tile_w, tile_h, spawner)
+  if (spawner.growth_to_spawn[spawn_step]) == nil then
+    spawner.growth_to_spawn[spawn_step] = {}
+  end
+  add(spawner.growth_to_spawn[spawn_step], {tile_w = tile_w, tile_h = tile_h})
 end
   
 
@@ -994,6 +1221,19 @@ function update_spawner(spawner)
     if (spawn_table != nil) then
       for zone in all(spawn_table) do
         create_spawn_zone(zone.pos)
+      end
+    end
+    
+    -- spawn growth
+    local spawn_table = spawner.growth_to_spawn[spawner.step]
+    if (spawn_table != nil) then
+      for growth in all(spawn_table) do
+        local xoffset = (growth.tile_w-g_tobro_window.tile_w) / 2
+        local yoffset = (growth.tile_h-g_tobro_window.tile_h) / 2
+        g_tobro_window.tile_w = growth.tile_w
+        g_tobro_window.tile_h = growth.tile_h
+        g_tobro_window.tile_pos.x -= xoffset
+        g_tobro_window.tile_pos.y -= yoffset
       end
     end
     
@@ -1045,11 +1285,23 @@ end
 function update_tobro_window()
 end
 
+function lost_hp()
+  g_hp -=1
+  if g_hp <= 0 then
+    g_hp = 0
+    game_over()
+  end
+end
+
 function draw_tobro_window(win)
   local p_pos = get_pixel_pos(win.tile_pos.x, win.tile_pos.y)
   local p_poswh = get_pixel_pos(win.tile_pos.x+ win.tile_w, win.tile_pos.y + win.tile_h)
   rectfill(p_pos.x - 1, p_pos.y - 1, p_poswh.x, p_poswh.y, 6)
   rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
+  
+  -- draw core
+  local hp_sprite = {77, 76, 75, 74, 73, 72}
+  spr(hp_sprite[g_hp + 1], 28, 28)
 end
 
 --UI
@@ -1104,7 +1356,7 @@ g_sound_manager.patterns = {
 
 __gfx__
 000000001111000000000000050000000665000055550000656000000660000022222200e0000000000000000500000065600000066500005555000006600000
-00000000e11e000006000000060000006ee500006ee600005e5000006ee60000288882000000000006000000060000005c5000006cc500006cc600006cc60000
+00000000e11e000006000000060000006ee500006ee600005e5000006ee600002bbbb2000000000006000000060000005c5000006cc500006cc600006cc60000
 00700700111100006e6500006e6000006ee500006ee60000656000006ee6000022222200000000006c6500006c600000656000006cc500006cc600006cc60000
 000770001ee100000600000006000000066500000660000000000000066000000022000000000000060000000600000000000000066500000660000006600000
 00077000000000000000000000000000000000000000000000000000000000000222200000000000000000000000000000000000000000000000000000000000
@@ -1112,7 +1364,7 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 22200000022222200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-28200000022002200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+29200000022002200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 22200000288228820000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000022882200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000022882200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1135,14 +1387,14 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-e0000000bbbb0000888800006d6c05700aa0000080080000eeee0000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000bbbb0000888800000bd6e576aaaa000008800000eeee0000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000bbbb00008888000008055570aaaa000008800000eeee0000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000bbbb0000888800000d8526070aa0000080080000eeee0000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000765ebe0c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000870b55c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000000000000000007d6b7ec0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000060700c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+e0000000bbbb0000888800006d6c05700aa0000080080000eeee00000ee0ee00bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0000000000000000
+00000000bbbb0000888800000bd6e576aaaa000008800000eeee0000eeeeeee0b6666660b6666660b6666660b6666660b6666660b66666600000000000000000
+00000000bbbb00008888000008055570aaaa000008800000eeee0000eeeeeee0b656555bb656565bb656555bb656555bb656556bb656555b0000000000000000
+00000000bbbb0000888800000d8526070aa0000080080000eeee0000eeeeeee0b666566bb666565bb666665bb666665bb666656bb666565b0000000000000000
+000000000000000000000000765ebe0c0000000000000000000000000eeeee00b656555ab656555ab656555ab656555ab656656ab656565a0000000000000000
+000000000000000000000000870b55c000000000000000000000000000eee000b656665ab656665ab656665ab656566ab656656ab656565a0000000000000000
+0000000000000000000000007d6b7ec0000000000000000000000000000e0000b666555ab666665ab666555ab666555ab666555ab666555a0000000000000000
+000000000000000000000000060700c000000000000000000000000000000000bbbbaaabbbbbaaabbbbbaaabbbbbaaabbbbbaaabbbbbaaab0000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1248,7 +1500,7 @@ __sfx__
 00010000137502e750047501275038750317501a750297502a7500b750297500f7500f7502f75022750147501f7501c7502c75021750107502075000700207502c7502475000700287502f750327500070000700
 000300001b0701b0601b0501b0401b030220702206022050220302202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000002805028050280502b05028050250502405023050200501f0501e0501d0501c0501c0501c0501b05000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00040000226201d62038630126502763016650266201a6402d640376101c640306302d62018650156300d6402f60016600186002060029600126000e6003460031600136002a6002b60016600176003360024600
+00040000225201d52038530125502753016550265201a5402d540375101c540305302d52018550155300d5402f50016500185002050029500125000e5003450031500135002a5002b50016500175003350024500
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010700000c01001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0001000016250182501c2501d2502025023250252502b2502f2503525038250001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
