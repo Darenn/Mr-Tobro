@@ -4,7 +4,7 @@ __lua__
 --lowrezjam
 --by darenn keller
 
---Game
+--game
 tile_size = 4
 g_pixel_size = 64
 g_row_tiles_count = 64 / tile_size 
@@ -32,9 +32,6 @@ g_map_buildings = {}
       g_map_buildings[x][y] = nil
     end
   end
-  
-    music(0)
-
   
 
 function _init()
@@ -149,7 +146,7 @@ function draw_buildings()
   end
 end
 
---Rendering
+--rendering
 -- render the nth sprite top left quarter on the tile at (tile_x, tile_y)
 function render_tiled_sprite(n, tile_x, tile_y, orientation, n_vertical)
   orientation = orientation or e_orientation.right
@@ -202,7 +199,7 @@ function orientation_to_direction(orientation)
 end
 
 
---Player
+--player
 function update_player(_player)
   
   -- activate
@@ -245,7 +242,7 @@ function create_player(x, y)
   return _player
 end
 
---Collision
+--collision
 walkable_tile = 2
 
 -- x and y are tile positions
@@ -270,7 +267,7 @@ function collide(obj, other)
     end
 end
 
---Utils
+--utils
 -- converts anything to string, even nested tables
 function tostring(any)
     if type(any)=="function" then 
@@ -315,7 +312,7 @@ end
 
 
 
---Bullet
+--bullet
 function update_bullet(_bullet)
   if (time() - _bullet.last_update_time > 1 / _bullet.speed) then
     _bullet.last_update_time = time()
@@ -369,19 +366,15 @@ function create_big_canon_bullet(x, y, direction)
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, true)
 end
 
-function create_explozeur_bullet(x, y, direction)
-  local speed = 0
+function create_big_canon_bullet(x, y, direction)
+  local speed = 15
   local hitbox_w = 4
   local hitbox_h = 4
   local sprite_id = 70
-  for _x=-2, 3 do
-    for _y=-2, 3 do
-      create_bullet(x + _x, y + _y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
-    end
-  end
+  create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
 end
 
---Building
+--building
 function create_building(tile_x, tile_y, orientation, _building_type_id)
   local building
   local build_info = g_buildings_info[_building_type_id]
@@ -406,7 +399,6 @@ building_type = {}
 building_type.canon = 0
 building_type.multiple_canon = 1
 building_type.big_canon = 2
-building_type.explozeur = 3
 
 g_building_canon = {}
   g_building_canon.price = 5
@@ -471,26 +463,10 @@ g_building_big_canon = {}
     create_big_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
   end
   
-g_building_explozeur = {}
-  g_building_explozeur.price = 50
-  g_building_explozeur.horizontal_sprite_id = 7
-  g_building_explozeur.vertical_sprite_id = 7
-  g_building_explozeur.hor_sprite_id_reload = 15
-  g_building_explozeur.ver_sprite_id_reload = 15
-  g_building_explozeur.cooldown = 1 -- time in sec
-  g_building_explozeur.activate = function (_building)
-    if not _building.is_ready then return end
-    on_activate(_building)
-    local direction = orientation_to_direction(_building.orientation)
-    local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
-    create_explozeur_bullet(bullet_pos.x, bullet_pos.y, direction)
-  end
-  
 g_buildings_info = {}
 g_buildings_info[building_type.canon] = g_building_canon
 g_buildings_info[building_type.multiple_canon] = g_building_multiple_canon
 g_buildings_info[building_type.big_canon] = g_building_big_canon
-g_buildings_info[building_type.explozeur] = g_building_explozeur
 
 -- all building are based on this, 
 -- call this at start of each create building functions
@@ -541,12 +517,11 @@ function draw_building(building)
   end
 end
 
---Menu
+--menu
 function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon,
-    building_type.explozeur}
+    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon}
     menu.highlighted_color = 12
     menu.highlighted_bad_color = 8
     menu.window_color = 1
@@ -689,23 +664,19 @@ function move_selection_down(menu)
 end
   
 function move_location_left(menu)
-  menu.building_tile_pos.x -=1
-  if menu.building_tile_pos.x < 0 then menu.building_tile_pos.x = 0 end
+  menu.building_tile_pos.x -=1 
 end
 
 function move_location_right(menu)
   menu.building_tile_pos.x +=1
-  if menu.building_tile_pos.x > 15 then menu.building_tile_pos.x = 15 end
 end
 
 function move_location_up(menu)
   menu.building_tile_pos.y -=1
-  if menu.building_tile_pos.y < 0 then menu.building_tile_pos.y = 0 end
 end
 
 function move_location_down(menu)
   menu.building_tile_pos.y +=1
-  if menu.building_tile_pos.y > 15 then menu.building_tile_pos.y = 15 end
 end
 
 function orientate_building_upward(menu)
@@ -819,7 +790,7 @@ function draw_money(pos, amount)
   else print(amount, pos.x + 2, pos.y, 7) end
 end
 
---Enemy
+--enemy
 function instanciate_enemy(enemy_type, pos)
   local copy = shallow_copy(g_enemies_info[enemy_type])
   copy.pos = pos
@@ -881,7 +852,7 @@ function draw_enemy(enemy)
   render_sprite(enemy.right_sprite_id, enemy.pos.x, enemy.pos.y)
 end
 
---Spawner
+--spawner
 function create_level(spawner)
   
   -- before start
@@ -961,7 +932,7 @@ function update_spawner(spawner)
   
 end
 
---SpawnZone
+--spawnzone
 function create_spawn_zone(pos, sprite_id)
   sprite_id = sprite_id or 67
   local zone = {}
@@ -978,7 +949,7 @@ function draw_spawn_zone(zone)
   render_sprite(zone.sprite_id, zone.pos.x, zone.pos.y)
 end
 
---TobroWindow
+--tobrowindow
 function create_tobro_window(tile_pos, tile_w, tile_h)
   tobro_window = {}
   tobro_window.tile_pos = tile_pos
@@ -1009,7 +980,7 @@ function draw_tobro_window(win)
   rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
 end
 
---UI
+--ui
 function updateui()
 end
 
@@ -1170,8 +1141,22 @@ e0e1e2e3e4e5e6e70000000000000000000000000000000000000000000000000000000000000000
 f0f1f2f3f4f5f6f7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000002405023050210501f0501d0501c0501a05018050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0010000004050040500405004050040500405009050090500905009050090500b0500b0500b0500b0500b05000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+011000002805028050280502b05028050250502405023050200501f0501e0501d0501c0501c0501b0501b05000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000002e0502e050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0109000034040340403404034040340403404034040280402f0402f0402f0402f0402d0402d0402d0402d0402d0402d0402d0402d040340403404034040340402f0402f0402f0402f0402f0402f0402f0402f045
 __music__
-01 01424344
-02 01424344
+01 01020344
+02 42424344
 
