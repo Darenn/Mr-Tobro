@@ -54,6 +54,7 @@ g_map_buildings = {}
   g_spawner = create_spawner()
   g_tobro_window = create_tobro_window({x=6,y=6},4,4)
   create_level(g_spawner)
+  music(1)
 end</function>
       <function name="_update" enabled="1">function _update()
     update_menu(g_menu)
@@ -101,8 +102,7 @@ function update_collisions()
     for e in all(copyE) do
       local destroyed = false;
       if (collide(bullet, e)) then
-        del(g_enemies, e)
-        g_money += 1
+        kill(e)
         destroyed = true;
       end
       if (not bullet.invicible and destroyed) then
@@ -223,18 +223,25 @@ end
   local new_position = {}
   new_position.x = _player.pos.x
   new_position.y = _player.pos.y
+  local pressed = false
   if (btnp(0)) then
+    pressed = true
     new_position.x -= 1
   elseif (btnp(1)) then
+    pressed = true
     new_position.x += 1
   elseif (btnp(2)) then
+    pressed = true
     new_position.y -= 1
   elseif (btnp(3)) then
+    pressed = true
     new_position.y += 1
   end
   if (is_walkable(new_position)) then
     _player.pos = new_position
+    if pressed then sfx(g_sound_manager.sfx_list.player_moves) end
   end
+  pressed = false
 end</function>
       <function name="draw" enabled="1">function draw_player(_player)
   render_tiled_sprite(_player.sprite_id, _player.pos.x, _player.pos.y)
@@ -577,6 +584,7 @@ end
 
 function on_activate_pressed(menu)
   if (is_in_selection(menu))then
+    sfx(g_sound_manager.sfx_list.validate_action)
     menu.state = menu_states.building_location
   elseif (is_in_location(menu)) then
     -- If we selected destroy
@@ -601,6 +609,8 @@ end
 function on_menu_pressed(menu)
   if (is_in_selection(menu))then
     g_in_menu = not g_in_menu
+    if g_in_menu then sfx(g_sound_manager.sfx_list.open_menu)
+    else sfx(g_sound_manager.sfx_list.close_menu) end
   elseif (is_in_location(menu)) then
      menu.state = menu_states.building_selection
   elseif (is_in_orientation(menu)) then
@@ -610,6 +620,7 @@ end
   
 
 function on_left_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_location(menu)) then
     move_location_left(menu)
   elseif (is_in_orientation(menu)) then
@@ -618,6 +629,7 @@ function on_left_arrow_pressed(menu)
 end
 
 function on_right_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_location(menu)) then
     move_location_right(menu)
   elseif (is_in_orientation(menu)) then
@@ -626,6 +638,7 @@ function on_right_arrow_pressed(menu)
 end
 
 function on_up_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_selection(menu))then
     move_selection_up(menu)
   elseif (is_in_location(menu)) then
@@ -636,6 +649,7 @@ function on_up_arrow_pressed(menu)
 end
 
 function on_down_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_selection(menu))then
     move_selection_down(menu)
   elseif (is_in_location(menu)) then
@@ -818,6 +832,12 @@ function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   return enemy
 end
 
+function kill(enemy)          
+  del(g_enemies, enemy)
+  g_money += 1
+  sfx(g_sound_manager.sfx_list.basic_enemy_dies)
+end
+
 g_enemy_type = {}
 g_enemy_type.basic = 1
 
@@ -936,6 +956,7 @@ end</function>
   zone.pos = pos
   zone.sprite_id = sprite_id
   add(g_spawn_zones, zone)
+  sfx(g_sound_manager.sfx_list.spawn_zone_appear)
   return zone
 end</function>
       <function name="update" enabled="1">function update_spawn_zone()
@@ -991,22 +1012,33 @@ function draw_price()
 end</function>
     </entity>
     <entity name="SoundManager" enabled="1">
-      <function name="sound_manager" enabled="1">g_sound_manager.sfx_list = {
-  basic_enemy_dies = 1
-  quick_enemy_dies = 2
-  big_enemy_dies = 3
-  spawn_zone_appears = 4
-  get_coin = 5
-  player_move = 6
-  open_menu = 7
-  close_menu = 8
-  move_menu = 9
-  validate_action = 10
-  impossible_action = 11
-  canon_shoot = 12
-  big_canon_shoot = 13
-  explozeur_shoot = 14
-  windows_xp_intro = 15
+      <function name="sound_manager" enabled="1">g_sound_manager = {}
+g_sound_manager.sfx_list = {
+  basic_enemy_dies = 1,
+  quick_enemy_dies = 2,
+  big_enemy_dies = 3,
+  spawn_zone_appears = 4,
+  get_coin = 5,
+  player_moves = 6,
+  open_menu = 7,
+  close_menu = 8,
+  move_menu = 9,
+  validate_action = 10,
+  impossible_action = 11,
+  canon_shoot = 12,
+  big_canon_shoot = 13,
+  explozeur_shoot = 14,
+  windows_xp_intro_lead = 15,
+  windows_xp_outro_lead = 16,
+  windows_xp_outro_bass = 17,
+  windows_xp_intro_bass = 18,
+  building_built = 19
+}
+
+g_sound_manager.patterns = {
+  window_xp_outro = 0,
+  window_xp_intro = 1
+  
 }</function>
     </entity>
   </entities>
