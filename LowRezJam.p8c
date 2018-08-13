@@ -133,8 +133,8 @@ function draw_bullets()
 end
 
 function draw_enemies()
-  for e in all(g_enemies) do
-    draw_enemy(e)
+  for i=#g_enemies - 1, 1, -1 do
+    draw_enemy(g_enemies[i])
   end
 end
 
@@ -880,9 +880,13 @@ end
 
 g_enemy_type = {}
 g_enemy_type.basic = 1
+g_enemy_type.fast = 2
+g_enemy_type.big = 3
 
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 4, 4, 1, 0.5, 8, 8)
+g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 0.75, 8, 8)
+g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 1.5, 16, 16)
+g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 1, 0.5, 17, 17)
 </function>
       <function name="update" enabled="1">function update_enemy(enemy)
   if (enemy.pos.x - 28 &gt; 0) then
@@ -908,7 +912,7 @@ g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 4, 4, 1, 0.5, 8, 8)
   end
 end</function>
       <function name="draw" enabled="1">function draw_enemy(enemy)
-  render_sprite(enemy.right_sprite_id, enemy.pos.x, enemy.pos.y)
+  spr(enemy.right_sprite_id, enemy.pos.x, enemy.pos.y)
 end</function>
     </entity>
     <entity name="Spawner" enabled="1">
@@ -937,6 +941,10 @@ end</function>
   spawn_enemy(20, g_enemy_type.basic, s2, spawner)
   spawn_enemy(24, g_enemy_type.basic, s3, spawner)
   spawn_enemy(26, g_enemy_type.basic, s2, spawner)
+  
+  
+  spawn_enemy(3, g_enemy_type.fast, s2, spawner)
+  spawn_enemy(3, g_enemy_type.big, s3, spawner)
   
 end</function>
       <function name="create" enabled="1">function create_spawner()
