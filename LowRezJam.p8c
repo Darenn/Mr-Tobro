@@ -368,6 +368,7 @@ function create_canon_bullet(x, y, direction)
   local hitbox_h = 1
   local sprite_id = 9
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, false)
+  sfx(g_sound_manager.sfx_list.canon_shoot)
 end
 
 function create_big_canon_bullet(x, y, direction)
@@ -376,14 +377,20 @@ function create_big_canon_bullet(x, y, direction)
   local hitbox_h = 4
   local sprite_id = 70
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, true)
+  sfx(g_sound_manager.sfx_list.big_canon_shoot)
 end
 
-function create_big_canon_bullet(x, y, direction)
-  local speed = 15
+function create_explozeur_bullet(x, y, direction)
+  local speed = 0
   local hitbox_w = 4
   local hitbox_h = 4
   local sprite_id = 70
-  create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
+  for _x=-4, 4 do
+    for _y=-4, 4 do     
+      create_bullet(x + _x, y + _y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
+    end
+  end
+  sfx(g_sound_manager.sfx_list.explozeur_shoot)
 end</function>
     </entity>
     <entity name="Building" enabled="1">
@@ -411,6 +418,7 @@ building_type = {}
 building_type.canon = 0
 building_type.multiple_canon = 1
 building_type.big_canon = 2
+building_type.explozeur = 3
 
 g_building_canon = {}
   g_building_canon.price = 5
@@ -475,10 +483,26 @@ g_building_big_canon = {}
     create_big_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
   end
   
+g_building_explozeur = {}
+  g_building_explozeur.price = 50
+  g_building_explozeur.horizontal_sprite_id = 7
+  g_building_explozeur.vertical_sprite_id = 7
+  g_building_explozeur.hor_sprite_id_reload = 15
+  g_building_explozeur.ver_sprite_id_reload = 15
+  g_building_explozeur.cooldown = 15 -- time in sec
+  g_building_explozeur.activate = function (_building)
+    if not _building.is_ready then return end
+    on_activate(_building)
+    local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+    local direction = orientation_to_direction(_building.orientation)
+    create_explozeur_bullet(bullet_pos.x, bullet_pos.y, direction)
+  end
+  
 g_buildings_info = {}
 g_buildings_info[building_type.canon] = g_building_canon
 g_buildings_info[building_type.multiple_canon] = g_building_multiple_canon
 g_buildings_info[building_type.big_canon] = g_building_big_canon
+g_buildings_info[building_type.explozeur] = g_building_explozeur
 
 -- All building are based on this, 
 -- call this at start of each create building functions
@@ -496,6 +520,9 @@ end
 
 -- to call on activate functions
 function on_activate(building)
+  if not building.is_ready then
+    sfx(g_sound_manager.sfx_list.building_reloading)
+  end
   building.is_ready = false
   building.reload_timer = building.cooldown
 end
@@ -531,7 +558,8 @@ end</function>
       <function name="create" enabled="1">function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon}
+    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon,
+    building_type.explozeur}
     menu.highlighted_color = 12
     menu.highlighted_bad_color = 8
     menu.window_color = 1
@@ -584,22 +612,31 @@ end
 
 function on_activate_pressed(menu)
   if (is_in_selection(menu))then
-    sfx(g_sound_manager.sfx_list.validate_action)
-    menu.state = menu_states.building_location
+    if can_buy_selected_building(menu) then
+      sfx(g_sound_manager.sfx_list.validate_action)
+      menu.state = menu_states.building_location
+    else
+      sfx(g_sound_manager.sfx_list.impossible_action)
+    end
   elseif (is_in_location(menu)) then
     -- If we selected destroy
     if get_menu_selected_id(menu) == -1 then
       local building = g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y]
-      if building != nil then 
+      if building != nil then
+        sfx(g_sound_manager.sfx_list.building_destroyed)
         g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y] = nil
+      else
+        sfx(g_sound_manager.sfx_list.impossible_action)
       end
     elseif (is_buildable(menu.building_tile_pos)) then
+      sfx(g_sound_manager.sfx_list.validate_action)
       menu.state = menu_states.building_orientation
     else
-      //TODO play error
+      sfx(g_sound_manager.sfx_list.impossible_action)
     end
     
   elseif (is_in_orientation(menu)) then
+    sfx(g_sound_manager.sfx_list.validate_action)
     menu.state = menu_states.building_selection
     g_in_menu = false
     build_building(menu)
@@ -612,8 +649,10 @@ function on_menu_pressed(menu)
     if g_in_menu then sfx(g_sound_manager.sfx_list.open_menu)
     else sfx(g_sound_manager.sfx_list.close_menu) end
   elseif (is_in_location(menu)) then
+    sfx(g_sound_manager.sfx_list.close_menu)
      menu.state = menu_states.building_selection
   elseif (is_in_orientation(menu)) then
+     sfx(g_sound_manager.sfx_list.close_menu)
     menu.state = menu_states.building_location
   end
 end
@@ -660,6 +699,7 @@ function on_down_arrow_pressed(menu)
 end
   
 function build_building(menu)
+  sfx(g_sound_manager.sfx_list.building_built)
   local id = get_menu_selected_id(menu)
   g_money -= g_buildings_info[get_menu_selected_id(menu)].price
   create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
@@ -956,7 +996,7 @@ end</function>
   zone.pos = pos
   zone.sprite_id = sprite_id
   add(g_spawn_zones, zone)
-  sfx(g_sound_manager.sfx_list.spawn_zone_appear)
+  sfx(g_sound_manager.sfx_list.spawn_zone_appears)
   return zone
 end</function>
       <function name="update" enabled="1">function update_spawn_zone()
@@ -1032,7 +1072,9 @@ g_sound_manager.sfx_list = {
   windows_xp_outro_lead = 16,
   windows_xp_outro_bass = 17,
   windows_xp_intro_bass = 18,
-  building_built = 19
+  building_built = 19,
+  building_reloading = 20,
+  building_destroyed = 21
 }
 
 g_sound_manager.patterns = {

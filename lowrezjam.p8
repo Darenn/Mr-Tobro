@@ -4,7 +4,7 @@ __lua__
 --lowrezjam
 --by darenn keller
 
---game
+--Game
 tile_size = 4
 g_pixel_size = 64
 g_row_tiles_count = 64 / tile_size 
@@ -43,6 +43,7 @@ function _init()
   g_spawner = create_spawner()
   g_tobro_window = create_tobro_window({x=6,y=6},4,4)
   create_level(g_spawner)
+  music(1)
 end
 
 function _update()
@@ -91,8 +92,7 @@ function update_collisions()
     for e in all(copye) do
       local destroyed = false;
       if (collide(bullet, e)) then
-        del(g_enemies, e)
-        g_money += 1
+        kill(e)
         destroyed = true;
       end
       if (not bullet.invicible and destroyed) then
@@ -146,7 +146,7 @@ function draw_buildings()
   end
 end
 
---rendering
+--Rendering
 -- render the nth sprite top left quarter on the tile at (tile_x, tile_y)
 function render_tiled_sprite(n, tile_x, tile_y, orientation, n_vertical)
   orientation = orientation or e_orientation.right
@@ -199,7 +199,7 @@ function orientation_to_direction(orientation)
 end
 
 
---player
+--Player
 function update_player(_player)
   
   -- activate
@@ -214,18 +214,25 @@ function update_player(_player)
   local new_position = {}
   new_position.x = _player.pos.x
   new_position.y = _player.pos.y
+  local pressed = false
   if (btnp(0)) then
+    pressed = true
     new_position.x -= 1
   elseif (btnp(1)) then
+    pressed = true
     new_position.x += 1
   elseif (btnp(2)) then
+    pressed = true
     new_position.y -= 1
   elseif (btnp(3)) then
+    pressed = true
     new_position.y += 1
   end
   if (is_walkable(new_position)) then
     _player.pos = new_position
+    if pressed then sfx(g_sound_manager.sfx_list.player_moves) end
   end
+  pressed = false
 end
 
 function draw_player(_player)
@@ -242,7 +249,7 @@ function create_player(x, y)
   return _player
 end
 
---collision
+--Collision
 walkable_tile = 2
 
 -- x and y are tile positions
@@ -267,7 +274,7 @@ function collide(obj, other)
     end
 end
 
---utils
+--Utils
 -- converts anything to string, even nested tables
 function tostring(any)
     if type(any)=="function" then 
@@ -312,7 +319,7 @@ end
 
 
 
---bullet
+--Bullet
 function update_bullet(_bullet)
   if (time() - _bullet.last_update_time > 1 / _bullet.speed) then
     _bullet.last_update_time = time()
@@ -356,6 +363,7 @@ function create_canon_bullet(x, y, direction)
   local hitbox_h = 1
   local sprite_id = 9
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, false)
+  sfx(g_sound_manager.sfx_list.canon_shoot)
 end
 
 function create_big_canon_bullet(x, y, direction)
@@ -364,17 +372,23 @@ function create_big_canon_bullet(x, y, direction)
   local hitbox_h = 4
   local sprite_id = 70
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 99, true)
+  sfx(g_sound_manager.sfx_list.big_canon_shoot)
 end
 
-function create_big_canon_bullet(x, y, direction)
+function create_explozeur_bullet(x, y, direction)
   local speed = 15
   local hitbox_w = 4
   local hitbox_h = 4
   local sprite_id = 70
-  create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
+  for _x=-3, 3 do
+    for _y=-3, 3 do     
+      create_bullet(x + _x, y + _y, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true)
+    end
+  end
+  sfx(g_sound_manager.sfx_list.explozeur_shoot)
 end
 
---building
+--Building
 function create_building(tile_x, tile_y, orientation, _building_type_id)
   local building
   local build_info = g_buildings_info[_building_type_id]
@@ -399,6 +413,7 @@ building_type = {}
 building_type.canon = 0
 building_type.multiple_canon = 1
 building_type.big_canon = 2
+building_type.explozeur = 3
 
 g_building_canon = {}
   g_building_canon.price = 5
@@ -463,10 +478,26 @@ g_building_big_canon = {}
     create_big_canon_bullet(bullet_pos.x, bullet_pos.y, direction)
   end
   
+g_building_explozeur = {}
+  g_building_explozeur.price = 50
+  g_building_explozeur.horizontal_sprite_id = 7
+  g_building_explozeur.vertical_sprite_id = 7
+  g_building_explozeur.hor_sprite_id_reload = 15
+  g_building_explozeur.ver_sprite_id_reload = 15
+  g_building_explozeur.cooldown = 15 -- time in sec
+  g_building_explozeur.activate = function (_building)
+    if not _building.is_ready then return end
+    on_activate(_building)
+    local bullet_pos = get_pixel_pos(_building.tile_pos.x,_building.tile_pos.y)
+    local direction = orientation_to_direction(_building.orientation)
+    create_explozeur_bullet(bullet_pos.x, bullet_pos.y, direction)
+  end
+  
 g_buildings_info = {}
 g_buildings_info[building_type.canon] = g_building_canon
 g_buildings_info[building_type.multiple_canon] = g_building_multiple_canon
 g_buildings_info[building_type.big_canon] = g_building_big_canon
+g_buildings_info[building_type.explozeur] = g_building_explozeur
 
 -- all building are based on this, 
 -- call this at start of each create building functions
@@ -484,6 +515,9 @@ end
 
 -- to call on activate functions
 function on_activate(building)
+  if not building.is_ready then
+    sfx(g_sound_manager.sfx_list.building_reloading)
+  end
   building.is_ready = false
   building.reload_timer = building.cooldown
 end
@@ -517,11 +551,12 @@ function draw_building(building)
   end
 end
 
---menu
+--Menu
 function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon}
+    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon,
+    building_type.explozeur}
     menu.highlighted_color = 12
     menu.highlighted_bad_color = 8
     menu.window_color = 1
@@ -575,21 +610,31 @@ end
 
 function on_activate_pressed(menu)
   if (is_in_selection(menu))then
-    menu.state = menu_states.building_location
+    if can_buy_selected_building(menu) then
+      sfx(g_sound_manager.sfx_list.validate_action)
+      menu.state = menu_states.building_location
+    else
+      sfx(g_sound_manager.sfx_list.impossible_action)
+    end
   elseif (is_in_location(menu)) then
     -- if we selected destroy
     if get_menu_selected_id(menu) == -1 then
       local building = g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y]
-      if building != nil then 
+      if building != nil then
+        sfx(g_sound_manager.sfx_list.building_destroyed)
         g_map_buildings[menu.building_tile_pos.x][menu.building_tile_pos.y] = nil
+      else
+        sfx(g_sound_manager.sfx_list.impossible_action)
       end
     elseif (is_buildable(menu.building_tile_pos)) then
+      sfx(g_sound_manager.sfx_list.validate_action)
       menu.state = menu_states.building_orientation
     else
-      //todo play error
+      sfx(g_sound_manager.sfx_list.impossible_action)
     end
     
   elseif (is_in_orientation(menu)) then
+    sfx(g_sound_manager.sfx_list.validate_action)
     menu.state = menu_states.building_selection
     g_in_menu = false
     build_building(menu)
@@ -599,15 +644,20 @@ end
 function on_menu_pressed(menu)
   if (is_in_selection(menu))then
     g_in_menu = not g_in_menu
+    if g_in_menu then sfx(g_sound_manager.sfx_list.open_menu)
+    else sfx(g_sound_manager.sfx_list.close_menu) end
   elseif (is_in_location(menu)) then
+    sfx(g_sound_manager.sfx_list.close_menu)
      menu.state = menu_states.building_selection
   elseif (is_in_orientation(menu)) then
+     sfx(g_sound_manager.sfx_list.close_menu)
     menu.state = menu_states.building_location
   end
 end
   
 
 function on_left_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_location(menu)) then
     move_location_left(menu)
   elseif (is_in_orientation(menu)) then
@@ -616,6 +666,7 @@ function on_left_arrow_pressed(menu)
 end
 
 function on_right_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_location(menu)) then
     move_location_right(menu)
   elseif (is_in_orientation(menu)) then
@@ -624,6 +675,7 @@ function on_right_arrow_pressed(menu)
 end
 
 function on_up_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_selection(menu))then
     move_selection_up(menu)
   elseif (is_in_location(menu)) then
@@ -634,6 +686,7 @@ function on_up_arrow_pressed(menu)
 end
 
 function on_down_arrow_pressed(menu)
+  sfx(g_sound_manager.sfx_list.move_menu)
   if (is_in_selection(menu))then
     move_selection_down(menu)
   elseif (is_in_location(menu)) then
@@ -644,6 +697,7 @@ function on_down_arrow_pressed(menu)
 end
   
 function build_building(menu)
+  sfx(g_sound_manager.sfx_list.building_built)
   local id = get_menu_selected_id(menu)
   g_money -= g_buildings_info[get_menu_selected_id(menu)].price
   create_building(menu.building_tile_pos.x, menu.building_tile_pos.y, menu.building_orientation, id)
@@ -790,7 +844,7 @@ function draw_money(pos, amount)
   else print(amount, pos.x + 2, pos.y, 7) end
 end
 
---enemy
+--Enemy
 function instanciate_enemy(enemy_type, pos)
   local copy = shallow_copy(g_enemies_info[enemy_type])
   copy.pos = pos
@@ -815,6 +869,12 @@ function create_info_enemy(x, y, w, h, hp, speed, right_sprite_id, up_sprite_id)
   enemy.up_sprite_id = up_sprite_id
   enemy.last_update_time = time()
   return enemy
+end
+
+function kill(enemy)          
+  del(g_enemies, enemy)
+  g_money += 1
+  sfx(g_sound_manager.sfx_list.basic_enemy_dies)
 end
 
 g_enemy_type = {}
@@ -852,7 +912,7 @@ function draw_enemy(enemy)
   render_sprite(enemy.right_sprite_id, enemy.pos.x, enemy.pos.y)
 end
 
---spawner
+--Spawner
 function create_level(spawner)
   
   -- before start
@@ -932,13 +992,14 @@ function update_spawner(spawner)
   
 end
 
---spawnzone
+--SpawnZone
 function create_spawn_zone(pos, sprite_id)
   sprite_id = sprite_id or 67
   local zone = {}
   zone.pos = pos
   zone.sprite_id = sprite_id
   add(g_spawn_zones, zone)
+  sfx(g_sound_manager.sfx_list.spawn_zone_appears)
   return zone
 end
 
@@ -949,7 +1010,7 @@ function draw_spawn_zone(zone)
   render_sprite(zone.sprite_id, zone.pos.x, zone.pos.y)
 end
 
---tobrowindow
+--TobroWindow
 function create_tobro_window(tile_pos, tile_w, tile_h)
   tobro_window = {}
   tobro_window.tile_pos = tile_pos
@@ -980,7 +1041,7 @@ function draw_tobro_window(win)
   rectfill(p_pos.x, p_pos.y, p_poswh.x - 1, p_poswh.y -1, 3)
 end
 
---ui
+--UI
 function updateui()
 end
 
@@ -997,6 +1058,38 @@ function draw_price()
   else print(g_money, 52, 1, 7) end
   
 end
+
+--SoundManager
+g_sound_manager = {}
+g_sound_manager.sfx_list = {
+  basic_enemy_dies = 1,
+  quick_enemy_dies = 2,
+  big_enemy_dies = 3,
+  spawn_zone_appears = 4,
+  get_coin = 5,
+  player_moves = 6,
+  open_menu = 7,
+  close_menu = 8,
+  move_menu = 9,
+  validate_action = 10,
+  impossible_action = 11,
+  canon_shoot = 12,
+  big_canon_shoot = 13,
+  explozeur_shoot = 14,
+  windows_xp_intro_lead = 15,
+  windows_xp_outro_lead = 16,
+  windows_xp_outro_bass = 17,
+  windows_xp_intro_bass = 18,
+  building_built = 19,
+  building_reloading = 20,
+  building_destroyed = 21
+}
+
+g_sound_manager.patterns = {
+  window_xp_outro = 0,
+  window_xp_intro = 1
+  
+}
 
 __gfx__
 000000001111000000000000050000000665000055550000656000000660000008080000e0000000000000000500000065600000066500005555000006600000
