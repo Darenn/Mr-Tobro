@@ -990,5 +990,24 @@ function draw_price()
   
 end</function>
     </entity>
+    <entity name="SoundManager" enabled="1">
+      <function name="sound_manager" enabled="1">g_sound_manager.sfx_list = {
+  basic_enemy_dies = 1
+  quick_enemy_dies = 2
+  big_enemy_dies = 3
+  spawn_zone_appears = 4
+  get_coin = 5
+  player_move = 6
+  open_menu = 7
+  close_menu = 8
+  move_menu = 9
+  validate_action = 10
+  impossible_action = 11
+  canon_shoot = 12
+  big_canon_shoot = 13
+  explozeur_shoot = 14
+  windows_xp_intro = 15
+}</function>
+    </entity>
   </entities>
 </project>
