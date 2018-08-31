@@ -24,6 +24,7 @@ g_enemy_total = 0
 g_enemy_killed = 0
 g_game_won = false
 g_in_main_menu = true
+g_debug_mode=false
 
 g_bullets = {}
 g_enemies = {}
@@ -66,6 +67,7 @@ function _update()
     
     if (g_enemy_killed == g_enemy_total) then
       g_game_won = true
+      music(g_sound_manager.patterns.window_xp_outro)
       grow(16, 16)
     end
 end
@@ -108,7 +110,7 @@ function update_collisions()
         damage(e, bullet.damage)
         destroyed = true;
       end
-      if (not bullet.invicible and destroyed) then
+      if ((not bullet.invicible or e.type== g_enemy_type.big) and destroyed) then
         del(g_bullets, bullet)
       end
     end
@@ -179,7 +181,8 @@ function draw_progression_bar()
   local height = 3
   rectfill(1, 1, 1 + width, 1+ height+1, 6)
   rectfill(2, 2, width, 1 + height, 1)
-  local progress = flr((g_enemy_killed / g_enemy_total) * width)
+  --local progress = flr((g_enemy_killed / g_enemy_total) * width)
+  local progress = flr((g_spawner.step / 385) * width)
   if (progress != 0) then
     rectfill(2, 2, progress, 1 + height, 11)
   end
@@ -408,9 +411,9 @@ function create_canon_bullet(x, y, direction)
 end
 
 function create_big_canon_bullet(x, y, direction)
-  local speed = 15
-  local hitbox_w = 4
-  local hitbox_h = 4
+  local speed = 150
+  local hitbox_w = 3
+  local hitbox_h = 3
   local sprite_id = 70
   create_bullet(x, y, hitbox_w, hitbox_h, direction, speed, sprite_id, 10, true, 3)
   sfx(g_sound_manager.sfx_list.big_canon_shoot)
@@ -423,7 +426,7 @@ function create_explozeur_bullet(x, y, direction)
   local sprite_id = 70
   for _x=-1, 1 do
     for _y=-1, 1 do     
-      create_bullet(x + _x * 4, y + _y * 4, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true, 3)
+      create_bullet(x + _x * 4, y + _y * 4, hitbox_w, hitbox_h, direction, speed, sprite_id, 0.2, true, 2)
     end
   end
   sfx(g_sound_manager.sfx_list.explozeur_shoot)
@@ -457,12 +460,12 @@ building_type.big_canon = 2
 building_type.explozeur = 3
 
 g_building_canon = {}
-  g_building_canon.price = 5
+  g_building_canon.price = 4
   g_building_canon.horizontal_sprite_id = 2
   g_building_canon.vertical_sprite_id = 3
   g_building_canon.hor_sprite_id_reload = 10
   g_building_canon.ver_sprite_id_reload = 11
-  g_building_canon.cooldown = 4 -- time in sec
+  g_building_canon.cooldown = 3 -- time in sec
   g_building_canon.activate = function (_building)
     if not building.is_ready then sfx(g_sound_manager.sfx_list.building_reloading) end
     if not _building.is_ready then return end
@@ -475,12 +478,12 @@ g_building_canon = {}
   end
   
 g_building_multiple_canon = {}
-  g_building_multiple_canon.price = 20
+  g_building_multiple_canon.price = 31
   g_building_multiple_canon.horizontal_sprite_id = 6
   g_building_multiple_canon.vertical_sprite_id = 6
   g_building_multiple_canon.hor_sprite_id_reload = 12
   g_building_multiple_canon.ver_sprite_id_reload = 12
-  g_building_multiple_canon.cooldown = 7 -- time in sec
+  g_building_multiple_canon.cooldown = 11 -- time in sec
   g_building_multiple_canon.activate = function (_building)
     if not building.is_ready then sfx(g_sound_manager.sfx_list.building_reloading) end
     if not _building.is_ready then return end
@@ -507,12 +510,12 @@ g_building_multiple_canon = {}
   end
   
 g_building_big_canon = {}
-  g_building_big_canon.price = 50
+  g_building_big_canon.price = 34
   g_building_big_canon.horizontal_sprite_id = 4
   g_building_big_canon.vertical_sprite_id = 5
   g_building_big_canon.hor_sprite_id_reload = 13
   g_building_big_canon.ver_sprite_id_reload = 14
-  g_building_big_canon.cooldown = 15 -- time in sec
+  g_building_big_canon.cooldown = 18 -- time in sec
   g_building_big_canon.activate = function (_building)
     if not building.is_ready then sfx(g_sound_manager.sfx_list.building_reloading) end
     if not _building.is_ready then return end
@@ -523,12 +526,12 @@ g_building_big_canon = {}
   end
   
 g_building_explozeur = {}
-  g_building_explozeur.price = 50
+  g_building_explozeur.price = 40
   g_building_explozeur.horizontal_sprite_id = 7
   g_building_explozeur.vertical_sprite_id = 7
   g_building_explozeur.hor_sprite_id_reload = 15
   g_building_explozeur.ver_sprite_id_reload = 15
-  g_building_explozeur.cooldown = 18 -- time in sec
+  g_building_explozeur.cooldown = 35 -- time in sec
   g_building_explozeur.activate = function (_building)
     if not building.is_ready then sfx(g_sound_manager.sfx_list.building_reloading) end
     if not _building.is_ready then return end
@@ -598,8 +601,7 @@ end
 function create_menu()
   local menu = {}
     menu.item_selected_index = 0
-    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon,
-    building_type.explozeur}
+    menu.items = {-1, building_type.canon,building_type.multiple_canon, building_type.big_canon, building_type.explozeur}
     menu.highlighted_color = 12
     menu.highlighted_bad_color = 8
     menu.window_color = 1
@@ -896,8 +898,9 @@ function instanciate_enemy(enemy_type, pos)
   return copy
 end
 
-function create_info_enemy(x, y, w, h, hp, price, speed, right_sprite_id, up_sprite_id)
+function create_info_enemy(x, y, w, h, hp, price, speed, right_sprite_id, up_sprite_id, type)
   local enemy = {}
+  enemy.type = type
   enemy.pos = {}
   enemy.pos.x = x
   enemy.pos.y = y
@@ -932,25 +935,28 @@ g_enemy_type = {}
 g_enemy_type.basic = 1
 g_enemy_type.fast = 2
 g_enemy_type.big = 3
+g_enemy_type.middle = 4
 
+--function create_info_enemy(x, y, w, h, hp, price, speed, right_sprite_id, up_sprite_id)
 g_enemies_info = {}
-g_enemies_info[g_enemy_type.basic] = create_info_enemy(0, 0, 6, 6, 1, 1, 0.75, 8, 8)
-g_enemies_info[g_enemy_type.fast] = create_info_enemy(0, 0, 4, 4, 1, 2, 1.5, 16, 16)
-g_enemies_info[g_enemy_type.big] = create_info_enemy(0, 0, 8, 8, 6, 4, 0.5, 17, 17)
+g_enemies_info[g_enemy_type.basic] =  create_info_enemy(0, 0, 6, 6, 1, 1, 0.75, 8, 8,g_enemy_type.basic)
+g_enemies_info[g_enemy_type.fast] =   create_info_enemy(0, 0, 3, 3, 1, 2, 1.5, 16, 16,g_enemy_type.fast)
+g_enemies_info[g_enemy_type.big] =    create_info_enemy(0, 0, 8, 8, 6, 5, 0.5, 17, 17,g_enemy_type.big)
+g_enemies_info[g_enemy_type.middle] = create_info_enemy(0, 0, 8, 6, 3, 3, 1,   19, 19,g_enemy_type.middle)
 
 
 function update_enemy(enemy)
-  if (enemy.pos.x - 28 > 0) then
+  if (enemy.pos.x > 32) then
     enemy.direction.x = -1
-  elseif (enemy.pos.x - 28 < 0) then
+  elseif (enemy.pos.x < 28) then
     enemy.direction.x = 1
   else
     enemy.direction.x = 0
   end
   
-  if (enemy.pos.y - 28 > 0) then
+  if (enemy.pos.y > 32) then
     enemy.direction.y = -1
-  elseif (enemy.pos.y - 28< 0) then
+  elseif (enemy.pos.y < 28) then
     enemy.direction.y = 1
   else
     enemy.direction.y = 0
@@ -985,21 +991,72 @@ function create_level(spawner)
   
   -- advices
   -- 3 seconds between basics on same spot(to see them)
-  -- at start
+
   
-  -- tutorial
+  -- zones
   
   local s1 = {x=0* tile_size, y=7* tile_size}; -- midleft
-  spawn_zone(3, s1, spawner)
-  spawn_enemy(6, g_enemy_type.basic, s1, spawner)
-  
   local s2 = {x=7 * tile_size, y=0* tile_size} -- midtop
-  spawn_zone(10, s2, spawner)
+  local s3 = {x=15* tile_size, y=7* tile_size} -- midright
+  local s4 = {x=7 * tile_size, y=15* tile_size} -- midbot
+  local s5 = {x=9 * tile_size, y=15* tile_size} -- midbot
+  local s6 = {x=0 * tile_size, y=8* tile_size} -- midbot
+  local s7 = {x=15 * tile_size, y=8* tile_size} -- midbot
+  local s8 = {x=15 * tile_size, y=4* tile_size} -- rightmidup
+  local s9 = {x=0 * tile_size, y=4* tile_size} -- leftmidup
+  local s10 = {x=0 * tile_size, y=12* tile_size} -- leftmidup
+  local s11 = {x=15 * tile_size, y=12* tile_size} -- leftmidup
+  local s20 = {x=5 * tile_size, y=0* tile_size} -- leftmidup
+  local s21 = {x=5 * tile_size, y=15* tile_size} -- leftmidup
+  local s12 = {x=15 * tile_size, y=5* tile_size} -- leftmidup
+  local s13 = {x=0 * tile_size, y=5* tile_size} -- leftmidup
+  local s14 = {x=0 * tile_size, y=10* tile_size} -- leftmidup
+  local s15 = {x=6 * tile_size, y=0* tile_size} -- leftmidup
+  local s16 = {x=9 * tile_size, y=0* tile_size} -- leftmidup
+  local s17 = {x= 11* tile_size, y=0* tile_size} -- leftmidup
+  local s18 = {x= 4* tile_size, y=15* tile_size} -- leftmidup
+  local s19 = {x= 11* tile_size, y=15* tile_size} -- leftmidup
+  local s20 = {x= 8* tile_size, y=0* tile_size}
+  local s21 = {x= 8* tile_size, y=15* tile_size}
+  local s22 = {x= 5* tile_size, y=0* tile_size}
+  local s23 = {x= 10* tile_size, y=0* tile_size}
+  local s24 = {x= 0* tile_size, y=15* tile_size}
+  local s25 = {x= 15* tile_size, y=15* tile_size}
+  local s26 = {x= 6* tile_size, y=15* tile_size}
+  local s27 = {x= 6* tile_size, y=0* tile_size}
+  local s28 = {x= 1* tile_size, y=15* tile_size}
+  local s29 = {x= 14* tile_size, y=15* tile_size}
+  local s30 = {x= 10* tile_size, y=15* tile_size}
+  local s31 = {x= 15* tile_size, y=9* tile_size}
+  local s32 = {x= 15* tile_size, y=10* tile_size}
+  local s33 = {x= 15* tile_size, y=14* tile_size}
+  local s34 = {x= 0* tile_size, y=14* tile_size}
+  local s35 = {x= 0* tile_size, y=3* tile_size}
+  local s36 = {x= 15* tile_size, y=3* tile_size}
+  
+  
+  -- regroupments
+  g_zones = {} -- will be fed by update
+  local zones_disorder = {s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21}
+  local zones_order = {s1, s9, s17, s15, s2, s16, s17, s8, s12, s3, s7, s21, s11, s19, s5, s4, s18, s10, s14, s20}
+  local zones_fast_1 = {s2, s6, s8, s18, s15}
+  local zones_fast_2 = {s1, s3, s7, s19, s14}
+  local zones_fast_3 = {s4, s9, s17, s12, s13}
+  local zones_fast_4 = {s4, s16, s20, s21, s5}
+  local zones_fast_5 = {s24, s25, s9, s19, s27}
+    
+    -- tutorial
+  
+  spawn_zone(1, s1, spawner)
+  spawn_enemy(5, g_enemy_type.basic, s1, spawner)
+  
+
+  spawn_zone(8, s2, spawner)
   spawn_enemy(10, g_enemy_type.basic, s1, spawner)
   
   -- to anounce the arrival of enemies on the right
-  local s3 = {x=15* tile_size, y=7* tile_size} -- midright
-  spawn_zone(10, s3, spawner)
+
+  spawn_zone(12, s3, spawner)
   spawn_enemy(13, g_enemy_type.basic, s2, spawner)
   spawn_enemy(16, g_enemy_type.basic, s2, spawner)
   spawn_enemy(13, g_enemy_type.basic, s1, spawner)
@@ -1018,12 +1075,12 @@ function create_level(spawner)
   -- end tutorial 34 s
   -- enough to build a fourth canon 
   -- 3 golds
-  local s4 = {x=7 * tile_size, y=15* tile_size} -- midbot
+
   spawn_zone(31, s4, spawner)
   spawn_enemy(35, g_enemy_type.basic, s1, spawner)
   spawn_enemy(35, g_enemy_type.basic, s2, spawner)
   spawn_enemy(35, g_enemy_type.basic, s3, spawner)
-  spawn_enemy(35, g_enemy_type.basic, s4, spawner)
+  spawn_enemy(35, g_enemy_type.middle, s4, spawner)
   spawn_enemy(38, g_enemy_type.basic, s1, spawner)
   spawn_enemy(38, g_enemy_type.basic, s2, spawner)
   spawn_enemy(38, g_enemy_type.basic, s3, spawner)
@@ -1035,14 +1092,12 @@ function create_level(spawner)
   
   -- 19 golds
   -- buy a new canon
-  local s5 = {x=9 * tile_size, y=15* tile_size} -- midbot
   spawn_zone(45, s5, spawner)
   spawn_enemy(50, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(50, g_enemy_type.basic, s2, spawner)
+  spawn_enemy(50, g_enemy_type.middle, s2, spawner)
   spawn_enemy(50, g_enemy_type.basic, s3, spawner)
   spawn_enemy(50, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(50, g_enemy_type.basic, s5, spawner)
-  
+  spawn_enemy(50, g_enemy_type.middle, s5, spawner)  
   spawn_enemy(54, g_enemy_type.basic, s3, spawner)
   spawn_enemy(54, g_enemy_type.basic, s4, spawner)
   spawn_enemy(54, g_enemy_type.basic, s5, spawner)
@@ -1052,13 +1107,12 @@ function create_level(spawner)
   
   -- 26 golds
   -- might want to try a multiple canon
-  local s6 = {x=0 * tile_size, y=8* tile_size} -- midbot
+
   spawn_zone(60, s6, spawner)
-  local s7 = {x=15 * tile_size, y=8* tile_size} -- midbot
   spawn_zone(60, s7, spawner)
   spawn_enemy(62, g_enemy_type.basic, s1, spawner)
   spawn_enemy(62, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(62, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(62, g_enemy_type.middle, s3, spawner)
   spawn_enemy(62, g_enemy_type.basic, s4, spawner)
   spawn_enemy(62, g_enemy_type.basic, s5, spawner)
   
@@ -1075,14 +1129,14 @@ function create_level(spawner)
   spawn_enemy(78, g_enemy_type.big, s6, spawner)
   
   -- try for force him realize enemies on the diagonals are hard to hit
-  local s8 = {x=15 * tile_size, y=4* tile_size} -- rightmidup
-  spawn_zone(84, s8, spawner)
-  local s9 = {x=0 * tile_size, y=4* tile_size} -- leftmidup
-  spawn_zone(88, s9, spawner)
   
+  
+  spawn_zone(84, s8, spawner)
+  spawn_zone(88, s9, spawner)
+  spawn_enemy_wave(90, g_zones, 4, g_enemy_type.basic, spawner)
   spawn_enemy(94, g_enemy_type.fast, s1, spawner)
   spawn_enemy(94, g_enemy_type.fast, s2, spawner)
-  spawn_enemy(94, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(94, g_enemy_type.middle, s3, spawner)
   spawn_enemy(94, g_enemy_type.fast, s4, spawner)
   spawn_enemy(94, g_enemy_type.fast, s5, spawner)
   spawn_enemy(94, g_enemy_type.fast, s6, spawner)
@@ -1090,34 +1144,36 @@ function create_level(spawner)
   spawn_enemy(94, g_enemy_type.basic, s8, spawner)
   spawn_enemy(94, g_enemy_type.basic, s9, spawner)
   
+  spawn_enemy_wave(95, g_zones, 6, g_enemy_type.basic, spawner)
   spawn_enemy(99, g_enemy_type.basic, s1, spawner)
   spawn_enemy(99, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(99, g_enemy_type.basic, s3, spawner)
+  spawn_enemy(99, g_enemy_type.middle, s3, spawner)
   spawn_enemy(99, g_enemy_type.basic, s4, spawner)
   spawn_enemy(99, g_enemy_type.basic, s5, spawner)
   spawn_enemy(99, g_enemy_type.basic, s6, spawner)
   spawn_enemy(99, g_enemy_type.basic, s7, spawner)
   
   -- 48 golds
-  spawn_growth(110, 4, 8, spawner)
   
+    spawn_zone(112, s10, spawner)
+  spawn_zone(112, s11, spawner)
+  
+  spawn_enemy_wave(115, g_zones, 5, g_enemy_type.fast, spawner)
+
   spawn_enemy(117, g_enemy_type.fast, s1, spawner)
   spawn_enemy(117, g_enemy_type.fast, s2, spawner)
-  spawn_enemy(117, g_enemy_type.fast, s3, spawner)
+  spawn_enemy(117, g_enemy_type.basic, s3, spawner)
   spawn_enemy(117, g_enemy_type.fast, s4, spawner)
-  spawn_enemy(117, g_enemy_type.fast, s5, spawner)
+  spawn_enemy(117, g_enemy_type.middle, s5, spawner)
   spawn_enemy(117, g_enemy_type.fast, s6, spawner)
-  spawn_enemy(117, g_enemy_type.fast, s7, spawner)
+  spawn_enemy(117, g_enemy_type.basic, s7, spawner)
   spawn_enemy(117, g_enemy_type.fast, s8, spawner)
-  spawn_enemy(113, g_enemy_type.fast, s9, spawner)
+  spawn_enemy(117, g_enemy_type.basic, s9, spawner)
+  spawn_enemy_wave(120, g_zones, 1, g_enemy_type.basic, spawner)
   
   -- 66 golds
-  local s10 = {x=0 * tile_size, y=12* tile_size} -- leftmidup
-  spawn_zone(115, s10, spawner)
-  local s11 = {x=15 * tile_size, y=12* tile_size} -- leftmidup
-  spawn_zone(119, s11, spawner)
   
-  spawn_enemy(125, g_enemy_type.basic, s1, spawner)
+  spawn_enemy(125, g_enemy_type.middle, s1, spawner)
   spawn_enemy(125, g_enemy_type.fast, s2, spawner)
   spawn_enemy(125, g_enemy_type.basic, s3, spawner)
   spawn_enemy(125, g_enemy_type.big, s4, spawner)
@@ -1127,17 +1183,17 @@ function create_level(spawner)
   spawn_enemy(125, g_enemy_type.fast, s8, spawner)
   spawn_enemy(125, g_enemy_type.fast, s9, spawner)
   
-  local s20 = {x=5 * tile_size, y=0* tile_size} -- leftmidup
+
   spawn_zone(128, s20, spawner)
-  local s21 = {x=5 * tile_size, y=15* tile_size} -- leftmidup
   spawn_zone(132, s21, spawner)
   
+  spawn_enemy_wave(138, g_zones, 1, g_enemy_type.basic, spawner)
   spawn_enemy(138, g_enemy_type.basic, s1, spawner)
   spawn_enemy(138, g_enemy_type.fast, s2, spawner)
   spawn_enemy(138, g_enemy_type.basic, s3, spawner)
   spawn_enemy(138, g_enemy_type.basic, s4, spawner)
   spawn_enemy(138, g_enemy_type.fast, s5, spawner)
-  spawn_enemy(138, g_enemy_type.basic, s6, spawner)
+  spawn_enemy(138, g_enemy_type.middle, s6, spawner)
   spawn_enemy(138, g_enemy_type.basic, s7, spawner)
   spawn_enemy(138, g_enemy_type.fast, s8, spawner)
   spawn_enemy(138, g_enemy_type.basic, s9, spawner)
@@ -1146,110 +1202,52 @@ function create_level(spawner)
   spawn_enemy(138, g_enemy_type.basic, s20, spawner)
   spawn_enemy(138, g_enemy_type.basic, s21, spawner)
   
-  spawn_enemy(148, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(148, g_enemy_type.fast, s3, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s5, spawner)
-  spawn_enemy(148, g_enemy_type.fast, s6, spawner)
-  spawn_enemy(148, g_enemy_type.big, s7, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s8, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s9, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s10, spawner)
-  spawn_enemy(148, g_enemy_type.fast, s11, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s20, spawner)
-  spawn_enemy(148, g_enemy_type.basic, s21, spawner)
+  -- first growth --------------------------------------------
+  spawn_growth(145, 6, 4, spawner)
   
-  local s12 = {x=15 * tile_size, y=5* tile_size} -- leftmidup
+  local zones_fast_6 = {s1, s3, s5, s9, s6}
+  
+  spawn_enemy_wave(150, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(148, zones_fast_6, 0.5, g_enemy_type.fast, spawner)
+  
+
   spawn_zone(145, s12, spawner)
-  local s13 = {x=0 * tile_size, y=5* tile_size} -- leftmidup
+
   spawn_zone(150, s13, spawner)
   
-  spawn_enemy(158, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(158, g_enemy_type.fast, s3, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s5, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s6, spawner)
-  spawn_enemy(158, g_enemy_type.fast, s7, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s8, spawner)
-  spawn_enemy(158, g_enemy_type.fast, s9, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s10, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s11, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s12, spawner)
-  spawn_enemy(158, g_enemy_type.basic, s13, spawner)
+  spawn_enemy_wave(155, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(160, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(164, zones_fast_6, 0.5, g_enemy_type.middle, spawner)
+  spawn_enemy_wave(168, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(172, zones_fast_6, 0.5, g_enemy_type.fast, spawner)
   
-  spawn_enemy(168, g_enemy_type.big, s1, spawner)
-  spawn_enemy(168, g_enemy_type.fast, s2, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s3, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(168, g_enemy_type.fast, s5, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s6, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s7, spawner)
-  spawn_enemy(168, g_enemy_type.fast, s8, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s9, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s10, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s11, spawner)
-  spawn_enemy(168, g_enemy_type.basic, s12, spawner)
-  spawn_enemy(168, g_enemy_type.fast, s13, spawner)
   
-  local s14 = {x=0 * tile_size, y=10* tile_size} -- leftmidup
   spawn_zone(172, s14, spawner)
-  local s15 = {x=6 * tile_size, y=0* tile_size} -- leftmidup
+  
   spawn_zone(175, s15, spawner)
   
-  spawn_enemy(178, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(178, g_enemy_type.fast, s3, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s5, spawner)
-  spawn_enemy(178, g_enemy_type.fast, s6, spawner)
-  spawn_enemy(178, g_enemy_type.big, s7, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s8, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s9, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s10, spawner)
-  spawn_enemy(178, g_enemy_type.fast, s11, spawner)
-  spawn_enemy(178, g_enemy_type.basic, s12, spawner)
-  spawn_enemy(178, g_enemy_type.fast, s13, spawner)
+  spawn_enemy_wave(178, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(184, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(186, zones_fast_1, 1, g_enemy_type.middle, spawner)
+  spawn_enemy_wave(188, zones_fast_2, 0.5, g_enemy_type.fast, spawner)
+  spawn_enemy_wave(192, zones_fast_6, 1, g_enemy_type.middle, spawner)
+  spawn_enemy(190, g_enemy_type.big, s9, spawner)
   
-   spawn_enemy(188, g_enemy_type.basic, s1, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s2, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s3, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s4, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s5, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s6, spawner)
-  spawn_enemy(188, g_enemy_type.fast, s7, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s8, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s9, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s10, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s11, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s12, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s13, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s14, spawner)
-  spawn_enemy(188, g_enemy_type.basic, s15, spawner)
-  
-  local s16 = {x=9 * tile_size, y=0* tile_size} -- leftmidup
   spawn_zone(190, s16, spawner)
-  local s17 = {x= 11* tile_size, y=0* tile_size} -- leftmidup
+  
   spawn_zone(193, s17, spawner)
-  local s18 = {x= 4* tile_size, y=15* tile_size} -- leftmidup
+  
   spawn_zone(196, s18, spawner)
-  local s19 = {x= 11* tile_size, y=15* tile_size} -- leftmidup
+  
   spawn_zone(198, s19, spawner)
   
-  -- second growth
-  spawn_growth(200, 8, 8, spawner)
   
-  local zones_disorder = {s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21}
-  local zones_order = {s1, s9, s17, s15, s2, s16, s17, s8, s12, s3, s7, s21, s11, s19, s5, s4, s18, s10, s14, s20}
-  local zones_fast_1 = {s2, s6, s8, s18, s15}
-  local zones_fast_2 = {s1, s3, s7, s19, s14}
-  local zones_fast_3 = {s4, s9, s17, s12, s13}
-  local zones_fast_4 = {s4, s16, s20, s21, s5}
-  spawn_enemy_wave(195, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(202, zones_order, 1, g_enemy_type.basic, spawner)
+
+  spawn_enemy_wave(195, zones_order, 0.5, g_enemy_type.basic, spawner)
+  spawn_enemy(196, g_enemy_type.big, s7, spawner)
+  spawn_enemy_wave(202, zones_order, 0.5, g_enemy_type.basic, spawner)
   spawn_enemy_wave(208, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(214, zones_fast_1, 1, g_enemy_type.fast, spawner)
+  spawn_enemy_wave(214, zones_fast_1, 0.5, g_enemy_type.fast, spawner)
   spawn_enemy_wave(220, zones_order, 1, g_enemy_type.basic, spawner)
   spawn_enemy_wave(227, zones_fast_2, 1, g_enemy_type.fast, spawner)
   spawn_enemy_wave(235, zones_order, 1, g_enemy_type.basic, spawner)
@@ -1258,17 +1256,10 @@ function create_level(spawner)
   spawn_enemy(258, g_enemy_type.big, s4, spawner)
   spawn_enemy_wave(264, zones_fast_3, 1, g_enemy_type.fast, spawner)
   
-  local s20 = {x= 8* tile_size, y=0* tile_size}
-  local s21 = {x= 8* tile_size, y=15* tile_size}
-  local s22 = {x= 5* tile_size, y=0* tile_size}
-  local s23 = {x= 10* tile_size, y=0* tile_size}
-  local s24 = {x= 0* tile_size, y=15* tile_size}
-  local s25 = {x= 15* tile_size, y=15* tile_size}
-  local s26 = {x= 6* tile_size, y=15* tile_size}
-  local s27 = {x= 6* tile_size, y=0* tile_size}
-  local s28 = {x= 1* tile_size, y=15* tile_size}
-  local s29 = {x= 14* tile_size, y=15* tile_size}
-  local s30 = {x= 10* tile_size, y=15* tile_size}
+    -- second growth----------------------------------------------
+  spawn_growth(272, 6, 6, spawner)
+  
+
   spawn_zone(270, s20, spawner)
   spawn_zone(270, s21, spawner)
   spawn_zone(270, s22, spawner)
@@ -1284,39 +1275,42 @@ function create_level(spawner)
   
   zones_disorder = {s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30}
   zones_order = {s1,s30, s9, s17,s26, s15, s2, s16, s27, s17, s8, s12, s3, s7, s21, s11,s25, s19, s21, s5, s24, s4, s18, s10, s14, s20}
-  local zones_fast_5 = {s24, s25, s9, s19, s27}
+
   
-  spawn_enemy_wave(272, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(276, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy(276, g_enemy_type.big, s4, spawner)
-  spawn_enemy_wave(279, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(283, zones_fast_5, 1, g_enemy_type.fast, spawner)
-  spawn_enemy(286, g_enemy_type.big, s2, spawner)
-  spawn_enemy_wave(290, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(294, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy(276, g_enemy_type.big, s6, spawner)
-  spawn_enemy_wave(298, zones_fast_2, 1, g_enemy_type.fast, spawner)
-  spawn_enemy(301, g_enemy_type.big, s3, spawner)
-  spawn_enemy_wave(307, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(311, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy(312, g_enemy_type.big, s8, spawner)
-  spawn_enemy_wave(314, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(318, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(325, zones_fast_5, 1, g_enemy_type.fast, spawner)
-  spawn_enemy(330, g_enemy_type.big, s3, spawner)
-  spawn_enemy(333, g_enemy_type.big, s2, spawner)
-  
-  spawn_enemy_wave(339, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(342, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(344, zones_fast_5, 1, g_enemy_type.fast, spawner)
-  spawn_enemy_wave(345, zones_fast_2, 1, g_enemy_type.fast, spawner)
-  spawn_enemy_wave(349, zones_fast_4, 1, g_enemy_type.big, spawner)
-  spawn_enemy_wave(353, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(356, zones_order, 1, g_enemy_type.basic, spawner)
-  spawn_enemy_wave(359, zones_fast_1, 1, g_enemy_type.fast, spawner)
-  spawn_enemy_wave(349, zones_fast_3, 1, g_enemy_type.big, spawner)
+    spawn_enemy(272, g_enemy_type.big, s6, spawner)
+  spawn_enemy(227, g_enemy_type.big, s3, spawner)
+  spawn_enemy_wave(272, zones_order, 0.5, g_enemy_type.basic, spawner)
+  spawn_enemy(274, g_enemy_type.big, s4, spawner)
+  spawn_enemy_wave(274, zones_fast_5, 0.5, g_enemy_type.fast, spawner)
+  spawn_enemy(277, g_enemy_type.big, s2, spawner)
+  spawn_enemy_wave(280, zones_order, 1, g_enemy_type.basic, spawner)
+  spawn_enemy(282, g_enemy_type.big, s6, spawner)
+  spawn_enemy_wave(284, zones_order, 1, g_enemy_type.middle, spawner)
+  spawn_enemy(288, g_enemy_type.big, s8, spawner)
+  spawn_enemy_wave(290, zones_order, 1, g_enemy_type.middle, spawner)
+  spawn_enemy_wave(298, zones_fast_5, 0.5, g_enemy_type.fast, spawner)
+  spawn_enemy(300, g_enemy_type.big, s3, spawner)
   
   
+  spawn_zone(336, s31, spawner)
+  spawn_zone(336, s32, spawner)
+  spawn_zone(336, s33, spawner)
+  spawn_zone(336, s34, spawner)
+  spawn_zone(336, s35, spawner)
+  spawn_zone(336, s36, spawner)
+  
+  
+  spawn_enemy_wave(309, zones_fast_5, 0.5, g_enemy_type.fast, spawner)
+  spawn_enemy_wave(310, g_zones, 1, g_enemy_type.middle, spawner)
+  spawn_enemy_wave(313, g_zones, 1, g_enemy_type.basic, spawner)
+  spawn_enemy_wave(319, zones_fast_4, 1, g_enemy_type.big, spawner)
+  spawn_enemy_wave(323, g_zones, 1, g_enemy_type.middle, spawner)
+  spawn_enemy_wave(325, zones_fast_1, 1, g_enemy_type.fast, spawner)
+  spawn_enemy_wave(330, zones_fast_3, 1, g_enemy_type.big, spawner)
+  spawn_enemy_wave(335, g_zones, 1, g_enemy_type.middle, spawner)
+  
+  zones_disorder = {s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20}
+  spawn_enemy_wave(350, zones_disorder, 0.5, g_enemy_type.big, spawner)
 end
 
 function create_spawner()
@@ -1338,6 +1332,7 @@ function spawn_enemy(spawn_step, enemy_type, pos, spawner)
 end
 
 function spawn_zone(spawn_step, pos, spawner)
+  add(g_zones, pos)
   if (spawner.zone_to_spawn[spawn_step]) == nil then
     spawner.zone_to_spawn[spawn_step] = {}
   end
@@ -1390,6 +1385,9 @@ function update_spawner(spawner)
     
     spawner.step += 1
     spawner.last_update_time = time()
+    if spawner.step >= 385 then 
+      g_enemy_killed = g_enemy_total
+    end
   end
   
 end
@@ -1451,7 +1449,7 @@ function lost_hp()
   sfx(g_sound_manager.sfx_list.lost_hp)
   if g_hp <= 0 then
     g_hp = 0
-    game_over()
+    if not g_debug_mode then game_over() end
   end
   
 end
@@ -1602,12 +1600,12 @@ __gfx__
 00700700000000000000000000000000000000000000000000000000000000002022020000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-22200000022222201111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-2920000002200220aa1111aa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-2220000028822882aa1111aa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000022882201111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000022882201111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000202222021111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+22200000022222201111111102222220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+2920000002200220aa1111aa22eeee22000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+2220000028822882aa1111aa222ee222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000022882201111111122222222000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000022882201111111102022020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000202222021111111120200202000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000202202011aaaa1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000002020020211aaaa1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
